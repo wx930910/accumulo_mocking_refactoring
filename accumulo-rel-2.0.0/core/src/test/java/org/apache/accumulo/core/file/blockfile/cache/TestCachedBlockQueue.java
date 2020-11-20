@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.LinkedList;
 
+import org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock;
 import org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlockQueue;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -29,19 +30,26 @@ public class TestCachedBlockQueue {
 
 	@Test
 	public void testQueue() {
-		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb1 = Mockito
-				.spy(new org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock("cb1",
-						new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 1, false));
-		// CachedBlock cb1 = new CachedBlock(1000, "cb1", 1);
-		CachedBlock cb2 = new CachedBlock(1500, "cb2", 2);
-		CachedBlock cb3 = new CachedBlock(1000, "cb3", 3);
-		CachedBlock cb4 = new CachedBlock(1500, "cb4", 4);
-		CachedBlock cb5 = new CachedBlock(1000, "cb5", 5);
-		CachedBlock cb6 = new CachedBlock(1750, "cb6", 6);
-		CachedBlock cb7 = new CachedBlock(1000, "cb7", 7);
-		CachedBlock cb8 = new CachedBlock(1500, "cb8", 8);
-		CachedBlock cb9 = new CachedBlock(1000, "cb9", 9);
-		CachedBlock cb10 = new CachedBlock(1500, "cb10", 10);
+		CachedBlock cb1 = Mockito
+				.spy(new CachedBlock("cb1", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 1, false));
+		CachedBlock cb2 = Mockito
+				.spy(new CachedBlock("cb2", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 2, false));
+		CachedBlock cb3 = Mockito
+				.spy(new CachedBlock("cb3", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 3, false));
+		CachedBlock cb4 = Mockito
+				.spy(new CachedBlock("cb4", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 4, false));
+		CachedBlock cb5 = Mockito
+				.spy(new CachedBlock("cb5", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 5, false));
+		CachedBlock cb6 = Mockito
+				.spy(new CachedBlock("cb6", new byte[(int) (1750 - CachedBlock.PER_BLOCK_OVERHEAD)], 6, false));
+		CachedBlock cb7 = Mockito
+				.spy(new CachedBlock("cb7", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 7, false));
+		CachedBlock cb8 = Mockito
+				.spy(new CachedBlock("cb8", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 8, false));
+		CachedBlock cb9 = Mockito
+				.spy(new CachedBlock("cb9", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 9, false));
+		CachedBlock cb10 = Mockito
+				.spy(new CachedBlock("cb10", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 10, false));
 
 		CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
 
@@ -62,7 +70,7 @@ public class TestCachedBlockQueue {
 
 		assertEquals(queue.heapSize(), expectedSize);
 
-		LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks = queue.getList();
+		LinkedList<CachedBlock> blocks = queue.getList();
 		assertEquals(blocks.poll().getName(), "cb1");
 		assertEquals(blocks.poll().getName(), "cb2");
 		assertEquals(blocks.poll().getName(), "cb3");
@@ -77,16 +85,26 @@ public class TestCachedBlockQueue {
 	@Test
 	public void testQueueSmallBlockEdgeCase() {
 
-		CachedBlock cb1 = new CachedBlock(1000, "cb1", 1);
-		CachedBlock cb2 = new CachedBlock(1500, "cb2", 2);
-		CachedBlock cb3 = new CachedBlock(1000, "cb3", 3);
-		CachedBlock cb4 = new CachedBlock(1500, "cb4", 4);
-		CachedBlock cb5 = new CachedBlock(1000, "cb5", 5);
-		CachedBlock cb6 = new CachedBlock(1750, "cb6", 6);
-		CachedBlock cb7 = new CachedBlock(1000, "cb7", 7);
-		CachedBlock cb8 = new CachedBlock(1500, "cb8", 8);
-		CachedBlock cb9 = new CachedBlock(1000, "cb9", 9);
-		CachedBlock cb10 = new CachedBlock(1500, "cb10", 10);
+		CachedBlock cb1 = Mockito
+				.spy(new CachedBlock("cb1", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 1, false));
+		CachedBlock cb2 = Mockito
+				.spy(new CachedBlock("cb2", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 2, false));
+		CachedBlock cb3 = Mockito
+				.spy(new CachedBlock("cb3", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 3, false));
+		CachedBlock cb4 = Mockito
+				.spy(new CachedBlock("cb4", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 4, false));
+		CachedBlock cb5 = Mockito
+				.spy(new CachedBlock("cb5", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 5, false));
+		CachedBlock cb6 = Mockito
+				.spy(new CachedBlock("cb6", new byte[(int) (1750 - CachedBlock.PER_BLOCK_OVERHEAD)], 6, false));
+		CachedBlock cb7 = Mockito
+				.spy(new CachedBlock("cb7", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 7, false));
+		CachedBlock cb8 = Mockito
+				.spy(new CachedBlock("cb8", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 8, false));
+		CachedBlock cb9 = Mockito
+				.spy(new CachedBlock("cb9", new byte[(int) (1000 - CachedBlock.PER_BLOCK_OVERHEAD)], 9, false));
+		CachedBlock cb10 = Mockito
+				.spy(new CachedBlock("cb10", new byte[(int) (1500 - CachedBlock.PER_BLOCK_OVERHEAD)], 10, false));
 
 		CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
 
@@ -100,8 +118,7 @@ public class TestCachedBlockQueue {
 		queue.add(cb8);
 		queue.add(cb9);
 		queue.add(cb10);
-
-		CachedBlock cb0 = new CachedBlock(10 + CachedBlock.PER_BLOCK_OVERHEAD, "cb0", 0);
+		CachedBlock cb0 = Mockito.spy(new CachedBlock("cb0", new byte[(int) 10], 0, false));
 		queue.add(cb0);
 
 		// This is older so we must include it, but it will not end up kicking
@@ -115,7 +132,7 @@ public class TestCachedBlockQueue {
 
 		assertEquals(queue.heapSize(), expectedSize);
 
-		LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks = queue.getList();
+		LinkedList<CachedBlock> blocks = queue.getList();
 		assertEquals(blocks.poll().getName(), "cb0");
 		assertEquals(blocks.poll().getName(), "cb1");
 		assertEquals(blocks.poll().getName(), "cb2");
@@ -128,9 +145,4 @@ public class TestCachedBlockQueue {
 
 	}
 
-	private static class CachedBlock extends org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock {
-		public CachedBlock(long heapSize, String name, long accessTime) {
-			super(name, new byte[(int) (heapSize - CachedBlock.PER_BLOCK_OVERHEAD)], accessTime, false);
-		}
-	}
 }
