@@ -51,27 +51,6 @@ public class RowDeletingIteratorTest {
 		return res;
 	}
 
-	public static class TestIE implements IteratorEnvironment {
-
-		private IteratorScope scope;
-		private boolean fmc;
-
-		public TestIE(IteratorScope scope, boolean fmc) {
-			this.scope = scope;
-			this.fmc = fmc;
-		}
-
-		@Override
-		public IteratorScope getIteratorScope() {
-			return scope;
-		}
-
-		@Override
-		public boolean isFullMajorCompaction() {
-			return fmc;
-		}
-	}
-
 	Key newKey(String row, String cf, String cq, long time) {
 		return new Key(new Text(row), new Text(cf), new Text(cq), time);
 	}
