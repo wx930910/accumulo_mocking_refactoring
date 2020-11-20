@@ -35,60 +35,63 @@ import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class TestThrift1474 {
 
-  static class TestServer implements ThriftTest.Iface {
+	static class TestServer implements ThriftTest.Iface {
 
-    @Override
-    public boolean success() throws TException {
-      return true;
-    }
+		@Override
+		public boolean success() throws TException {
+			return true;
+		}
 
-    @Override
-    public boolean fails() throws TException {
-      return false;
-    }
+		@Override
+		public boolean fails() throws TException {
+			return false;
+		}
 
-    @Override
-    public boolean throwsError() throws ThriftSecurityException, TException {
-      throw new ThriftSecurityException();
-    }
+		@Override
+		public boolean throwsError() throws ThriftSecurityException, TException {
+			throw new ThriftSecurityException();
+		}
 
-  }
+	}
 
-  @Test
-  public void test() throws IOException, TException, InterruptedException {
-    TServerSocket serverTransport = new TServerSocket(0);
-    serverTransport.listen();
-    int port = serverTransport.getServerSocket().getLocalPort();
-    TestServer handler = new TestServer();
-    ThriftTest.Processor<ThriftTest.Iface> processor = new ThriftTest.Processor<>(handler);
+	@Test
+	public void test() throws IOException, TException, InterruptedException {
+		TServerSocket serverTransport = new TServerSocket(0);
+		serverTransport.listen();
+		int port = serverTransport.getServerSocket().getLocalPort();
+		ThriftTest.Iface handler = Mockito.mock(ThriftTest.Iface.class);
+		Mockito.when(handler.success()).thenReturn(true);
+		Mockito.when(handler.throwsError()).thenThrow(new ThriftSecurityException());
+		ThriftTest.Processor<ThriftTest.Iface> processor = new ThriftTest.Processor<>(handler);
 
-    TThreadPoolServer.Args args = new TThreadPoolServer.Args(serverTransport);
-    args.stopTimeoutVal = 10;
-    args.stopTimeoutUnit = TimeUnit.MILLISECONDS;
-    final TServer server = new TThreadPoolServer(args.processor(processor));
-    Thread thread = new Thread(server::serve);
-    thread.start();
-    while (!server.isServing()) {
-      sleepUninterruptibly(10, TimeUnit.MILLISECONDS);
-    }
+		TThreadPoolServer.Args args = new TThreadPoolServer.Args(serverTransport);
+		args.stopTimeoutVal = 10;
+		args.stopTimeoutUnit = TimeUnit.MILLISECONDS;
+		final TServer server = new TThreadPoolServer(args.processor(processor));
+		Thread thread = new Thread(server::serve);
+		thread.start();
+		while (!server.isServing()) {
+			sleepUninterruptibly(10, TimeUnit.MILLISECONDS);
+		}
 
-    TTransport transport = new TSocket("localhost", port);
-    transport.open();
-    TProtocol protocol = new TBinaryProtocol(transport);
-    ThriftTest.Client client = new ThriftTest.Client(protocol);
-    assertTrue(client.success());
-    assertFalse(client.fails());
-    try {
-      client.throwsError();
-      fail("no exception thrown");
-    } catch (ThriftSecurityException ex) {
-      // expected
-    }
-    server.stop();
-    thread.join();
-  }
+		TTransport transport = new TSocket("localhost", port);
+		transport.open();
+		TProtocol protocol = new TBinaryProtocol(transport);
+		ThriftTest.Client client = new ThriftTest.Client(protocol);
+		assertTrue(client.success());
+		assertFalse(client.fails());
+		try {
+			client.throwsError();
+			fail("no exception thrown");
+		} catch (ThriftSecurityException ex) {
+			// expected
+		}
+		server.stop();
+		thread.join();
+	}
 
 }

@@ -41,258 +41,315 @@ import org.apache.accumulo.core.iterators.SortedMapIterator;
 import org.apache.accumulo.core.iterators.system.ColumnFamilySkippingIterator;
 import org.apache.hadoop.io.Text;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.collect.ImmutableSet;
 
 public class RowFilterTest {
 
-  public static class SummingRowFilter extends RowFilter {
+	private static RowFilter mockRowFilter() {
+		RowFilter res = Mockito.mock(RowFilter.class, Mockito.CALLS_REAL_METHODS);
+		try {
+			Mockito.when(res.acceptRow(Mockito.any())).thenAnswer(invo -> {
+				SortedKeyValueIterator<Key, Value> rowIterator = invo.getArgument(0);
+				int sum = 0;
+				int sum2 = 0;
 
-    @Override
-    public boolean acceptRow(SortedKeyValueIterator<Key,Value> rowIterator) throws IOException {
-      int sum = 0;
-      int sum2 = 0;
+				Key firstKey = null;
 
-      Key firstKey = null;
+				if (rowIterator.hasTop()) {
+					firstKey = new Key(rowIterator.getTopKey());
+				}
 
-      if (rowIterator.hasTop()) {
-        firstKey = new Key(rowIterator.getTopKey());
-      }
+				while (rowIterator.hasTop()) {
+					sum += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
 
-      while (rowIterator.hasTop()) {
-        sum += Integer.parseInt(rowIterator.getTopValue().toString());
-        rowIterator.next();
-      }
+				// ensure that seeks are confined to the row
+				rowIterator.seek(new Range(null, false, firstKey == null ? null : firstKey.getRow(), false),
+						new HashSet<>(), false);
+				while (rowIterator.hasTop()) {
+					sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
 
-      // ensure that seeks are confined to the row
-      rowIterator.seek(new Range(null, false, firstKey == null ? null : firstKey.getRow(), false),
-          new HashSet<>(), false);
-      while (rowIterator.hasTop()) {
-        sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
-        rowIterator.next();
-      }
+				rowIterator.seek(new Range(firstKey == null ? null : firstKey.getRow(), false, null, true),
+						new HashSet<>(), false);
+				while (rowIterator.hasTop()) {
+					sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
 
-      rowIterator.seek(new Range(firstKey == null ? null : firstKey.getRow(), false, null, true),
-          new HashSet<>(), false);
-      while (rowIterator.hasTop()) {
-        sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
-        rowIterator.next();
-      }
+				return sum == 2 && sum2 == 0;
+			});
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return res;
+	}
 
-      return sum == 2 && sum2 == 0;
-    }
+	public static class SummingRowFilter extends RowFilter {
 
-  }
+		@Override
+		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) throws IOException {
+			int sum = 0;
+			int sum2 = 0;
 
-  public static class RowZeroOrOneFilter extends RowFilter {
-    private static final Set<String> passRows = new HashSet<>(Arrays.asList("0", "1"));
+			Key firstKey = null;
 
-    @Override
-    public boolean acceptRow(SortedKeyValueIterator<Key,Value> rowIterator) {
-      return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
-    }
-  }
+			if (rowIterator.hasTop()) {
+				firstKey = new Key(rowIterator.getTopKey());
+			}
 
-  public static class RowOneOrTwoFilter extends RowFilter {
-    private static final Set<String> passRows = new HashSet<>(Arrays.asList("1", "2"));
+			while (rowIterator.hasTop()) {
+				sum += Integer.parseInt(rowIterator.getTopValue().toString());
+				rowIterator.next();
+			}
 
-    @Override
-    public boolean acceptRow(SortedKeyValueIterator<Key,Value> rowIterator) {
-      return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
-    }
-  }
+			// ensure that seeks are confined to the row
+			rowIterator.seek(new Range(null, false, firstKey == null ? null : firstKey.getRow(), false),
+					new HashSet<>(), false);
+			while (rowIterator.hasTop()) {
+				sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+				rowIterator.next();
+			}
 
-  public static class TrueFilter extends RowFilter {
-    @Override
-    public boolean acceptRow(SortedKeyValueIterator<Key,Value> rowIterator) {
-      return true;
-    }
-  }
+			rowIterator.seek(new Range(firstKey == null ? null : firstKey.getRow(), false, null, true), new HashSet<>(),
+					false);
+			while (rowIterator.hasTop()) {
+				sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+				rowIterator.next();
+			}
 
-  public List<Mutation> createMutations() {
-    List<Mutation> mutations = new LinkedList<>();
-    Mutation m = new Mutation("0");
-    m.put("cf1", "cq1", "1");
-    m.put("cf1", "cq2", "1");
-    m.put("cf1", "cq3", "1");
-    m.put("cf1", "cq4", "1");
-    m.put("cf1", "cq5", "1");
-    m.put("cf1", "cq6", "1");
-    m.put("cf1", "cq7", "1");
-    m.put("cf1", "cq8", "1");
-    m.put("cf1", "cq9", "1");
-    m.put("cf2", "cq1", "1");
-    m.put("cf2", "cq2", "1");
-    mutations.add(m);
+			return sum == 2 && sum2 == 0;
+		}
 
-    m = new Mutation("1");
-    m.put("cf1", "cq1", "1");
-    m.put("cf2", "cq2", "2");
-    mutations.add(m);
+	}
 
-    m = new Mutation("2");
-    m.put("cf1", "cq1", "1");
-    m.put("cf1", "cq2", "1");
-    mutations.add(m);
+	public static class RowZeroOrOneFilter extends RowFilter {
+		private static final Set<String> passRows = new HashSet<>(Arrays.asList("0", "1"));
 
-    m = new Mutation("3");
-    m.put("cf1", "cq1", "0");
-    m.put("cf2", "cq2", "2");
-    mutations.add(m);
+		@Override
+		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
+			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
+		}
+	}
 
-    m = new Mutation("4");
-    m.put("cf1", "cq1", "1");
-    m.put("cf1", "cq2", "1");
-    m.put("cf1", "cq3", "1");
-    m.put("cf1", "cq4", "1");
-    m.put("cf1", "cq5", "1");
-    m.put("cf1", "cq6", "1");
-    m.put("cf1", "cq7", "1");
-    m.put("cf1", "cq8", "1");
-    m.put("cf1", "cq9", "1");
-    m.put("cf2", "cq1", "1");
-    m.put("cf2", "cq2", "1");
+	public static class RowOneOrTwoFilter extends RowFilter {
+		private static final Set<String> passRows = new HashSet<>(Arrays.asList("1", "2"));
 
-    mutations.add(m);
-    return mutations;
-  }
+		@Override
+		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
+			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
+		}
+	}
 
-  public TreeMap<Key,Value> createKeyValues() {
-    List<Mutation> mutations = createMutations();
-    TreeMap<Key,Value> keyValues = new TreeMap<>();
+	public static class TrueFilter extends RowFilter {
+		@Override
+		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
+			return true;
+		}
+	}
 
-    final Text cf = new Text(), cq = new Text();
-    for (Mutation m : mutations) {
-      final Text row = new Text(m.getRow());
-      for (ColumnUpdate update : m.getUpdates()) {
-        cf.set(update.getColumnFamily());
-        cq.set(update.getColumnQualifier());
+	public List<Mutation> createMutations() {
+		List<Mutation> mutations = new LinkedList<>();
+		Mutation m = new Mutation("0");
+		m.put("cf1", "cq1", "1");
+		m.put("cf1", "cq2", "1");
+		m.put("cf1", "cq3", "1");
+		m.put("cf1", "cq4", "1");
+		m.put("cf1", "cq5", "1");
+		m.put("cf1", "cq6", "1");
+		m.put("cf1", "cq7", "1");
+		m.put("cf1", "cq8", "1");
+		m.put("cf1", "cq9", "1");
+		m.put("cf2", "cq1", "1");
+		m.put("cf2", "cq2", "1");
+		mutations.add(m);
 
-        Key k = new Key(row, cf, cq);
-        Value v = new Value(update.getValue());
+		m = new Mutation("1");
+		m.put("cf1", "cq1", "1");
+		m.put("cf2", "cq2", "2");
+		mutations.add(m);
 
-        keyValues.put(k, v);
-      }
-    }
+		m = new Mutation("2");
+		m.put("cf1", "cq1", "1");
+		m.put("cf1", "cq2", "1");
+		mutations.add(m);
 
-    return keyValues;
-  }
+		m = new Mutation("3");
+		m.put("cf1", "cq1", "0");
+		m.put("cf2", "cq2", "2");
+		mutations.add(m);
 
-  @Test
-  public void test1() throws Exception {
-    ColumnFamilySkippingIterator source =
-        new ColumnFamilySkippingIterator(new SortedMapIterator(createKeyValues()));
+		m = new Mutation("4");
+		m.put("cf1", "cq1", "1");
+		m.put("cf1", "cq2", "1");
+		m.put("cf1", "cq3", "1");
+		m.put("cf1", "cq4", "1");
+		m.put("cf1", "cq5", "1");
+		m.put("cf1", "cq6", "1");
+		m.put("cf1", "cq7", "1");
+		m.put("cf1", "cq8", "1");
+		m.put("cf1", "cq9", "1");
+		m.put("cf2", "cq1", "1");
+		m.put("cf2", "cq2", "1");
 
-    RowFilter filter = new SummingRowFilter();
-    filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		mutations.add(m);
+		return mutations;
+	}
 
-    filter.seek(new Range(), Collections.emptySet(), false);
+	public TreeMap<Key, Value> createKeyValues() {
+		List<Mutation> mutations = createMutations();
+		TreeMap<Key, Value> keyValues = new TreeMap<>();
 
-    assertEquals(new HashSet<>(Arrays.asList("2", "3")), getRows(filter));
+		final Text cf = new Text(), cq = new Text();
+		for (Mutation m : mutations) {
+			final Text row = new Text(m.getRow());
+			for (ColumnUpdate update : m.getUpdates()) {
+				cf.set(update.getColumnFamily());
+				cq.set(update.getColumnQualifier());
 
-    ByteSequence cf = new ArrayByteSequence("cf2");
+				Key k = new Key(row, cf, cq);
+				Value v = new Value(update.getValue());
 
-    filter.seek(new Range(), ImmutableSet.of(cf), true);
-    assertEquals(new HashSet<>(Arrays.asList("1", "3", "0", "4")), getRows(filter));
+				keyValues.put(k, v);
+			}
+		}
 
-    filter.seek(new Range("0", "4"), Collections.emptySet(), false);
-    assertEquals(new HashSet<>(Arrays.asList("2", "3")), getRows(filter));
+		return keyValues;
+	}
 
-    filter.seek(new Range("2"), Collections.emptySet(), false);
-    assertEquals(new HashSet<>(Arrays.asList("2")), getRows(filter));
+	@Test
+	public void test1() throws Exception {
+		ColumnFamilySkippingIterator source = new ColumnFamilySkippingIterator(
+				new SortedMapIterator(createKeyValues()));
 
-    filter.seek(new Range("4"), Collections.emptySet(), false);
-    assertEquals(new HashSet<String>(), getRows(filter));
+		RowFilter filter = mockRowFilter();
+		filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
 
-    filter.seek(new Range("4"), ImmutableSet.of(cf), true);
-    assertEquals(new HashSet<>(Arrays.asList("4")), getRows(filter));
+		filter.seek(new Range(), Collections.emptySet(), false);
 
-  }
+		assertEquals(new HashSet<>(Arrays.asList("2", "3")), getRows(filter));
 
-  @Test
-  public void testChainedRowFilters() throws Exception {
-    SortedMapIterator source = new SortedMapIterator(createKeyValues());
+		ByteSequence cf = new ArrayByteSequence("cf2");
 
-    RowFilter filter0 = new TrueFilter();
-    filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		filter.seek(new Range(), ImmutableSet.of(cf), true);
+		assertEquals(new HashSet<>(Arrays.asList("1", "3", "0", "4")), getRows(filter));
 
-    RowFilter filter = new TrueFilter();
-    filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		filter.seek(new Range("0", "4"), Collections.emptySet(), false);
+		assertEquals(new HashSet<>(Arrays.asList("2", "3")), getRows(filter));
 
-    filter.seek(new Range(), Collections.emptySet(), false);
+		filter.seek(new Range("2"), Collections.emptySet(), false);
+		assertEquals(new HashSet<>(Arrays.asList("2")), getRows(filter));
 
-    assertEquals(new HashSet<>(Arrays.asList("0", "1", "2", "3", "4")), getRows(filter));
-  }
+		filter.seek(new Range("4"), Collections.emptySet(), false);
+		assertEquals(new HashSet<String>(), getRows(filter));
 
-  @Test
-  public void testFilterConjunction() throws Exception {
+		filter.seek(new Range("4"), ImmutableSet.of(cf), true);
+		assertEquals(new HashSet<>(Arrays.asList("4")), getRows(filter));
 
-    SortedMapIterator source = new SortedMapIterator(createKeyValues());
+	}
 
-    RowFilter filter0 = new RowZeroOrOneFilter();
-    filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+	@Test
+	public void testChainedRowFilters() throws Exception {
+		SortedMapIterator source = new SortedMapIterator(createKeyValues());
 
-    RowFilter filter = new RowOneOrTwoFilter();
-    filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter0 = Mockito.mock(RowFilter.class, Mockito.CALLS_REAL_METHODS);
+		Mockito.when(filter0.acceptRow(Mockito.any())).thenReturn(true);
+		filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
 
-    filter.seek(new Range(), Collections.emptySet(), false);
+		RowFilter filter = new TrueFilter();
+		filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
 
-    assertEquals(new HashSet<>(Arrays.asList("1")), getRows(filter));
-  }
+		filter.seek(new Range(), Collections.emptySet(), false);
 
-  @Test
-  public void deepCopyCopiesTheSource() throws Exception {
-    SortedMapIterator source = new SortedMapIterator(createKeyValues());
+		assertEquals(new HashSet<>(Arrays.asList("0", "1", "2", "3", "4")), getRows(filter));
+	}
 
-    RowFilter filter = new RowZeroOrOneFilter();
-    filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+	@Test
+	public void testFilterConjunction() throws Exception {
 
-    filter.seek(new Range(), Collections.emptySet(), false);
+		SortedMapIterator source = new SortedMapIterator(createKeyValues());
 
-    // Save off the first key and value
-    Key firstKey = filter.getTopKey();
-    Value firstValue = filter.getTopValue();
+		RowFilter filter0 = new RowZeroOrOneFilter();
+		filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		Set<String> passRows = new HashSet<>(Arrays.asList("1", "2"));
+		// RowFilter filter = new RowOneOrTwoFilter();
+		RowFilter filter = Mockito.mock(RowFilter.class, Mockito.CALLS_REAL_METHODS);
+		Mockito.doAnswer(invo -> {
+			SortedKeyValueIterator<Key, Value> rowIterator = invo.getArgument(0);
+			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
+		}).when(filter).acceptRow(Mockito.any());
+		filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
 
-    // Assert that the row is valid given our filter
-    assertEquals("0", firstKey.getRow().toString());
+		filter.seek(new Range(), Collections.emptySet(), false);
 
-    // Read some extra data, just making sure it's all valid
-    Key lastKeyRead = null;
-    for (int i = 0; i < 5; i++) {
-      filter.next();
-      lastKeyRead = filter.getTopKey();
-      assertEquals("0", lastKeyRead.getRow().toString());
-    }
+		assertEquals(new HashSet<>(Arrays.asList("1")), getRows(filter));
+	}
 
-    // Make a copy of the original RowFilter
-    RowFilter copy = (RowFilter) filter.deepCopy(new DefaultIteratorEnvironment());
+	@Test
+	public void deepCopyCopiesTheSource() throws Exception {
+		SortedMapIterator source = new SortedMapIterator(createKeyValues());
+		final Set<String> passRows = new HashSet<>(Arrays.asList("0", "1"));
+		// RowFilter filter = new RowZeroOrOneFilter();
+		RowFilter filter = Mockito.mock(RowFilter.class, Mockito.CALLS_REAL_METHODS);
+		Mockito.doAnswer(invo -> {
+			SortedKeyValueIterator<Key, Value> rowIterator = invo.getArgument(0);
+			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
+		}).when(filter).acceptRow(Mockito.any());
+		filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
 
-    // Because it's a copy, we should be able to safely seek this one without affecting the original
-    copy.seek(new Range(), Collections.emptySet(), false);
+		filter.seek(new Range(), Collections.emptySet(), false);
 
-    assertTrue("deepCopy'ed RowFilter did not have a top key", copy.hasTop());
+		// Save off the first key and value
+		Key firstKey = filter.getTopKey();
+		Value firstValue = filter.getTopValue();
 
-    Key firstKeyFromCopy = copy.getTopKey();
-    Value firstValueFromCopy = copy.getTopValue();
+		// Assert that the row is valid given our filter
+		assertEquals("0", firstKey.getRow().toString());
 
-    // Verify that we got the same first k-v pair we did earlier
-    assertEquals(firstKey, firstKeyFromCopy);
-    assertEquals(firstValue, firstValueFromCopy);
+		// Read some extra data, just making sure it's all valid
+		Key lastKeyRead = null;
+		for (int i = 0; i < 5; i++) {
+			filter.next();
+			lastKeyRead = filter.getTopKey();
+			assertEquals("0", lastKeyRead.getRow().toString());
+		}
 
-    filter.next();
-    Key finalKeyRead = filter.getTopKey();
+		// Make a copy of the original RowFilter
+		RowFilter copy = (RowFilter) filter.deepCopy(new DefaultIteratorEnvironment());
 
-    // Make sure we got a Key that was greater than the last Key we read from the original RowFilter
-    assertTrue("Expected next key read to be greater than the previous after deepCopy",
-        lastKeyRead.compareTo(finalKeyRead) < 0);
-  }
+		// Because it's a copy, we should be able to safely seek this one
+		// without affecting the original
+		copy.seek(new Range(), Collections.emptySet(), false);
 
-  private HashSet<String> getRows(RowFilter filter) throws IOException {
-    HashSet<String> rows = new HashSet<>();
-    while (filter.hasTop()) {
-      rows.add(filter.getTopKey().getRowData().toString());
-      filter.next();
-    }
-    return rows;
-  }
+		assertTrue("deepCopy'ed RowFilter did not have a top key", copy.hasTop());
+
+		Key firstKeyFromCopy = copy.getTopKey();
+		Value firstValueFromCopy = copy.getTopValue();
+
+		// Verify that we got the same first k-v pair we did earlier
+		assertEquals(firstKey, firstKeyFromCopy);
+		assertEquals(firstValue, firstValueFromCopy);
+
+		filter.next();
+		Key finalKeyRead = filter.getTopKey();
+
+		// Make sure we got a Key that was greater than the last Key we read
+		// from the original RowFilter
+		assertTrue("Expected next key read to be greater than the previous after deepCopy",
+				lastKeyRead.compareTo(finalKeyRead) < 0);
+	}
+
+	private HashSet<String> getRows(RowFilter filter) throws IOException {
+		HashSet<String> rows = new HashSet<>();
+		while (filter.hasTop()) {
+			rows.add(filter.getTopKey().getRowData().toString());
+			filter.next();
+		}
+		return rows;
+	}
 }

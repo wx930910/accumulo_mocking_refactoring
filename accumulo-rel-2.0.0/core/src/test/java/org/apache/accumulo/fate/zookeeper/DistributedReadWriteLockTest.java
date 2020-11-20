@@ -27,106 +27,133 @@ import java.util.concurrent.locks.ReadWriteLock;
 
 import org.apache.accumulo.fate.zookeeper.DistributedReadWriteLock.QueueLock;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class DistributedReadWriteLockTest {
 
-  // Non-zookeeper version of QueueLock
-  public static class MockQueueLock implements QueueLock {
+	// Non-zookeeper version of QueueLock
+	public static class MockQueueLock implements QueueLock {
 
-    long next = 0L;
-    final SortedMap<Long,byte[]> locks = new TreeMap<>();
+		long next = 0L;
+		final SortedMap<Long, byte[]> locks = new TreeMap<>();
 
-    @Override
-    public synchronized SortedMap<Long,byte[]> getEarlierEntries(long entry) {
-      SortedMap<Long,byte[]> result = new TreeMap<>();
-      result.putAll(locks.headMap(entry + 1));
-      return result;
-    }
+		@Override
+		public synchronized SortedMap<Long, byte[]> getEarlierEntries(long entry) {
+			SortedMap<Long, byte[]> result = new TreeMap<>();
+			result.putAll(locks.headMap(entry + 1));
+			return result;
+		}
 
-    @Override
-    public synchronized void removeEntry(long entry) {
-      synchronized (locks) {
-        locks.remove(entry);
-        locks.notifyAll();
-      }
-    }
+		@Override
+		public synchronized void removeEntry(long entry) {
+			synchronized (locks) {
+				locks.remove(entry);
+				locks.notifyAll();
+			}
+		}
 
-    @Override
-    public synchronized long addEntry(byte[] data) {
-      long result;
-      synchronized (locks) {
-        locks.put(result = next++, data);
-        locks.notifyAll();
-      }
-      return result;
-    }
-  }
+		@Override
+		public synchronized long addEntry(byte[] data) {
+			long result;
+			synchronized (locks) {
+				locks.put(result = next++, data);
+				locks.notifyAll();
+			}
+			return result;
+		}
+	}
 
-  // some data that is probably not going to update atomically
-  static class SomeData {
-    private AtomicIntegerArray data = new AtomicIntegerArray(100);
-    private AtomicInteger counter = new AtomicInteger();
+	// some data that is probably not going to update atomically
+	static class SomeData {
+		private AtomicIntegerArray data = new AtomicIntegerArray(100);
+		private AtomicInteger counter = new AtomicInteger();
 
-    void read() {
-      for (int i = 0; i < data.length(); i++)
-        assertEquals(counter.get(), data.get(i));
-    }
+		void read() {
+			for (int i = 0; i < data.length(); i++)
+				assertEquals(counter.get(), data.get(i));
+		}
 
-    void write() {
-      int nextCount = counter.incrementAndGet();
-      for (int i = data.length() - 1; i >= 0; i--)
-        data.set(i, nextCount);
-    }
-  }
+		void write() {
+			int nextCount = counter.incrementAndGet();
+			for (int i = data.length() - 1; i >= 0; i--)
+				data.set(i, nextCount);
+		}
+	}
 
-  @Test
-  public void testLock() throws Exception {
-    final SomeData data = new SomeData();
-    data.write();
-    data.read();
-    QueueLock qlock = new MockQueueLock();
+	@Test
+	public void testLock() throws Exception {
+		final SomeData data = new SomeData();
+		data.write();
+		data.read();
+		QueueLock qlock = Mockito.mock(QueueLock.class);
+		long[] next = { 0L };
+		final SortedMap<Long, byte[]> locks = new TreeMap<>();
+		Mockito.when(qlock.getEarlierEntries(Mockito.anyLong())).thenAnswer(invo -> {
+			long entry = invo.getArgument(0);
+			SortedMap<Long, byte[]> result = new TreeMap<>();
+			result.putAll(locks.headMap(entry + 1));
+			return result;
+		});
+		Mockito.doAnswer(invo -> {
+			long entry = invo.getArgument(0);
+			synchronized (locks) {
+				locks.remove(entry);
+				locks.notifyAll();
+			}
+			return null;
+		}).when(qlock).removeEntry(Mockito.anyLong());
+		Mockito.when(qlock.addEntry(Mockito.any())).thenAnswer(invo -> {
+			byte[] d = invo.getArgument(0);
+			long result;
+			synchronized (locks) {
+				locks.put(result = next[0]++, d);
+				locks.notifyAll();
+			}
+			return result;
+		});
 
-    final ReadWriteLock locker = new DistributedReadWriteLock(qlock, "locker1".getBytes());
-    final Lock readLock = locker.readLock();
-    final Lock writeLock = locker.writeLock();
-    readLock.lock();
-    readLock.unlock();
-    writeLock.lock();
-    writeLock.unlock();
-    readLock.lock();
-    readLock.unlock();
+		final ReadWriteLock locker = new DistributedReadWriteLock(qlock, "locker1".getBytes());
+		final Lock readLock = locker.readLock();
+		final Lock writeLock = locker.writeLock();
+		readLock.lock();
+		readLock.unlock();
+		writeLock.lock();
+		writeLock.unlock();
+		readLock.lock();
+		readLock.unlock();
 
-    // do a bunch of reads/writes in separate threads, look for inconsistent updates
-    Thread[] threads = new Thread[2];
-    for (int i = 0; i < threads.length; i++) {
-      final int which = i;
-      threads[i] = new Thread(() -> {
-        if (which % 2 == 0) {
-          final Lock wl = locker.writeLock();
-          wl.lock();
-          try {
-            data.write();
-          } finally {
-            wl.unlock();
-          }
-        } else {
-          final Lock rl = locker.readLock();
-          rl.lock();
-          data.read();
-          try {
-            data.read();
-          } finally {
-            rl.unlock();
-          }
-        }
-      });
-    }
-    for (Thread t : threads) {
-      t.start();
-    }
-    for (Thread t : threads) {
-      t.join();
-    }
-  }
+		// do a bunch of reads/writes in separate threads, look for inconsistent
+		// updates
+		Thread[] threads = new Thread[2];
+		for (int i = 0; i < threads.length; i++) {
+			final int which = i;
+			threads[i] = new Thread(() -> {
+				if (which % 2 == 0) {
+					final Lock wl = locker.writeLock();
+					wl.lock();
+					try {
+						data.write();
+					} finally {
+						wl.unlock();
+					}
+				} else {
+					final Lock rl = locker.readLock();
+					rl.lock();
+					data.read();
+					try {
+						data.read();
+					} finally {
+						rl.unlock();
+					}
+				}
+			});
+		}
+		for (Thread t : threads) {
+			t.start();
+		}
+		for (Thread t : threads) {
+			t.join();
+		}
+	}
 
 }

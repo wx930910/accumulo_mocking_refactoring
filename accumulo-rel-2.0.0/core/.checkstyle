@@ -7,14 +7,10 @@
   </local-check-config>
   <fileset name="java-sources-check-style" enabled="true" check-config-name="maven-checkstyle-plugin check-style" local="true">
     <file-match-pattern match-pattern="^src/main/java/.*\.java" include-pattern="true"/>
-    <file-match-pattern match-pattern="^target/filtered-java-src/.*\.java" include-pattern="true"/>
     <file-match-pattern match-pattern="^src/test/java/.*\.java" include-pattern="true"/>
     <file-match-pattern match-pattern="^src/main/java.*.*thrift/.*\.java" include-pattern="false"/>
     <file-match-pattern match-pattern="^src/main/java.*.*proto/.*\.java" include-pattern="false"/>
     <file-match-pattern match-pattern="^src/main/java.*.*HelpMojo\.java" include-pattern="false"/>
-    <file-match-pattern match-pattern="^target/filtered-java-src.*.*thrift/.*\.java" include-pattern="false"/>
-    <file-match-pattern match-pattern="^target/filtered-java-src.*.*proto/.*\.java" include-pattern="false"/>
-    <file-match-pattern match-pattern="^target/filtered-java-src.*.*HelpMojo\.java" include-pattern="false"/>
     <file-match-pattern match-pattern="^src/test/java.*.*thrift/.*\.java" include-pattern="false"/>
     <file-match-pattern match-pattern="^src/test/java.*.*proto/.*\.java" include-pattern="false"/>
     <file-match-pattern match-pattern="^src/test/java.*.*HelpMojo\.java" include-pattern="false"/>

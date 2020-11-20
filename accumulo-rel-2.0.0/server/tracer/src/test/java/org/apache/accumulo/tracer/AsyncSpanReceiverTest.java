@@ -27,108 +27,121 @@ import org.apache.htrace.HTraceConfiguration;
 import org.apache.htrace.Span;
 import org.apache.htrace.impl.MilliSpan;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class AsyncSpanReceiverTest {
-  static class TestReceiver extends AsyncSpanReceiver<String,String> {
-    AtomicInteger spansSent = new AtomicInteger(0);
+	static class TestReceiver extends AsyncSpanReceiver<String, String> {
+		AtomicInteger spansSent = new AtomicInteger(0);
 
-    TestReceiver() {
-      super(HTraceConfiguration.EMPTY);
-    }
+		TestReceiver() {
+			super(HTraceConfiguration.EMPTY);
+		}
 
-    TestReceiver(HTraceConfiguration conf) {
-      super(conf);
-    }
+		TestReceiver(HTraceConfiguration conf) {
+			super(conf);
+		}
 
-    @Override
-    protected String createDestination(String o) {
-      return "DEST";
-    }
+		@Override
+		protected String createDestination(String o) {
+			return "DEST";
+		}
 
-    @Override
-    protected void send(String resource, RemoteSpan span) {
-      spansSent.incrementAndGet();
-    }
+		@Override
+		protected void send(String resource, RemoteSpan span) {
+			spansSent.incrementAndGet();
+		}
 
-    @Override
-    protected String getSpanKey(Map<String,String> data) {
-      return "DEST";
-    }
+		@Override
+		protected String getSpanKey(Map<String, String> data) {
+			return "DEST";
+		}
 
-    int getSpansSent() {
-      return spansSent.get();
-    }
+		int getSpansSent() {
+			return spansSent.get();
+		}
 
-    int getQueueSize() {
-      return sendQueueSize.get();
-    }
-  }
+		int getQueueSize() {
+			return sendQueueSize.get();
+		}
+	}
 
-  Span createSpan(long length) {
-    long time = System.currentTimeMillis();
-    return new MilliSpan.Builder().begin(time).end(time + length).description("desc")
-        .parents(Collections.emptyList()).spanId(1).traceId(2).build();
-  }
+	Span createSpan(long length) {
+		long time = System.currentTimeMillis();
+		return new MilliSpan.Builder().begin(time).end(time + length).description("desc")
+				.parents(Collections.emptyList()).spanId(1).traceId(2).build();
+	}
 
-  @Test
-  public void test() throws InterruptedException {
-    try (TestReceiver receiver = new TestReceiver()) {
+	@Test
+	public void test() throws InterruptedException {
+		AtomicInteger spansSent = new AtomicInteger(0);
+		AsyncSpanReceiver<String, String> receiver = Mockito.mock(AsyncSpanReceiver.class, Mockito.withSettings()
+				.defaultAnswer(Mockito.CALLS_REAL_METHODS).useConstructor(HTraceConfiguration.EMPTY));
+		Mockito.when(receiver.createDestination(Mockito.anyString())).thenReturn("DEST");
+		try {
+			Mockito.doAnswer(invo -> {
+				spansSent.incrementAndGet();
+				return null;
+			}).when(receiver).send(Mockito.anyString(), Mockito.any());
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		Mockito.when(receiver.getSpanKey(Mockito.anyMap())).thenReturn("DEST");
 
-      receiver.receiveSpan(createSpan(0));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(0, receiver.getSpansSent());
+		receiver.receiveSpan(createSpan(0));
+		while (receiver.sendQueueSize.get() > 0) {
+			Thread.sleep(500);
+		}
+		assertEquals(0, receiver.sendQueueSize.get());
+		assertEquals(0, spansSent.get());
 
-      receiver.receiveSpan(createSpan(1));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(1, receiver.getSpansSent());
-    }
-  }
+		receiver.receiveSpan(createSpan(1));
+		while (receiver.sendQueueSize.get() > 0) {
+			Thread.sleep(500);
+		}
+		assertEquals(0, receiver.sendQueueSize.get());
+		assertEquals(1, spansSent.get());
 
-  @Test
-  public void testKeepAll() throws InterruptedException {
-    try (TestReceiver receiver = new TestReceiver(HTraceConfiguration
-        .fromMap(Collections.singletonMap(AsyncSpanReceiver.SPAN_MIN_MS, "0")))) {
+	}
 
-      receiver.receiveSpan(createSpan(0));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(1, receiver.getSpansSent());
-    }
-  }
+	@Test
+	public void testKeepAll() throws InterruptedException {
+		try (TestReceiver receiver = new TestReceiver(
+				HTraceConfiguration.fromMap(Collections.singletonMap(AsyncSpanReceiver.SPAN_MIN_MS, "0")))) {
 
-  @Test
-  public void testExcludeMore() throws InterruptedException {
-    try (TestReceiver receiver = new TestReceiver(HTraceConfiguration
-        .fromMap(Collections.singletonMap(AsyncSpanReceiver.SPAN_MIN_MS, "10")))) {
+			receiver.receiveSpan(createSpan(0));
+			while (receiver.getQueueSize() > 0) {
+				Thread.sleep(500);
+			}
+			assertEquals(0, receiver.getQueueSize());
+			assertEquals(1, receiver.getSpansSent());
+		}
+	}
 
-      receiver.receiveSpan(createSpan(0));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(0, receiver.getSpansSent());
+	@Test
+	public void testExcludeMore() throws InterruptedException {
+		try (TestReceiver receiver = new TestReceiver(
+				HTraceConfiguration.fromMap(Collections.singletonMap(AsyncSpanReceiver.SPAN_MIN_MS, "10")))) {
 
-      receiver.receiveSpan(createSpan(9));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(0, receiver.getSpansSent());
+			receiver.receiveSpan(createSpan(0));
+			while (receiver.getQueueSize() > 0) {
+				Thread.sleep(500);
+			}
+			assertEquals(0, receiver.getQueueSize());
+			assertEquals(0, receiver.getSpansSent());
 
-      receiver.receiveSpan(createSpan(10));
-      while (receiver.getQueueSize() > 0) {
-        Thread.sleep(500);
-      }
-      assertEquals(0, receiver.getQueueSize());
-      assertEquals(1, receiver.getSpansSent());
-    }
-  }
+			receiver.receiveSpan(createSpan(9));
+			while (receiver.getQueueSize() > 0) {
+				Thread.sleep(500);
+			}
+			assertEquals(0, receiver.getQueueSize());
+			assertEquals(0, receiver.getSpansSent());
+
+			receiver.receiveSpan(createSpan(10));
+			while (receiver.getQueueSize() > 0) {
+				Thread.sleep(500);
+			}
+			assertEquals(0, receiver.getQueueSize());
+			assertEquals(1, receiver.getSpansSent());
+		}
+	}
 }

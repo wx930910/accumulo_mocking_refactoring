@@ -26,6 +26,7 @@ import java.util.TreeMap;
 
 import org.apache.accumulo.hadoop.mapreduce.InputFormatBuilder;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.shaded.org.mockito.Mockito;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,87 +35,108 @@ import org.junit.Test;
  */
 public class InputFormatBuilderTest {
 
-  private class InputFormatBuilderImplTest<T> extends InputFormatBuilderImpl<T> {
-    private String currentTable;
-    private SortedMap<String,InputTableConfig> tableConfigMap = new TreeMap<>();
-    private SortedMap<String,String> newHints = new TreeMap<>();
+	private class InputFormatBuilderImplTest<T> extends InputFormatBuilderImpl<T> {
+		private String currentTable;
+		private SortedMap<String, InputTableConfig> tableConfigMap = new TreeMap<>();
+		private SortedMap<String, String> newHints = new TreeMap<>();
 
-    private InputFormatBuilderImplTest(Class<T> callingClass) {
-      super(callingClass);
-    }
+		private InputFormatBuilderImplTest(Class<T> callingClass) {
+			super(callingClass);
+		}
 
-    @Override
-    public InputFormatBuilder.InputFormatOptions<T> table(String tableName) {
-      this.currentTable = tableName;
-      tableConfigMap.put(currentTable, new InputTableConfig());
-      return this;
-    }
+		@Override
+		public InputFormatBuilder.InputFormatOptions<T> table(String tableName) {
+			this.currentTable = tableName;
+			tableConfigMap.put(currentTable, new InputTableConfig());
+			return this;
+		}
 
-    @Override
-    public InputFormatBuilder.InputFormatOptions<T> classLoaderContext(String context) {
-      tableConfigMap.get(currentTable).setContext(context);
-      return this;
-    }
+		@Override
+		public InputFormatBuilder.InputFormatOptions<T> classLoaderContext(String context) {
+			tableConfigMap.get(currentTable).setContext(context);
+			return this;
+		}
 
-    private Optional<String> getClassLoaderContext() {
-      return tableConfigMap.get(currentTable).getContext();
-    }
+		private Optional<String> getClassLoaderContext() {
+			return tableConfigMap.get(currentTable).getContext();
+		}
 
-    @Override
-    public InputFormatBuilder.InputFormatOptions<T> executionHints(Map<String,String> hints) {
-      this.newHints.putAll(hints);
-      tableConfigMap.get(currentTable).setExecutionHints(hints);
-      return this;
-    }
+		@Override
+		public InputFormatBuilder.InputFormatOptions<T> executionHints(Map<String, String> hints) {
+			this.newHints.putAll(hints);
+			tableConfigMap.get(currentTable).setExecutionHints(hints);
+			return this;
+		}
 
-    private SortedMap<String,String> getExecutionHints() {
-      return newHints;
-    }
-  }
+		private SortedMap<String, String> getExecutionHints() {
+			return newHints;
+		}
+	}
 
-  private InputTableConfig tableQueryConfig;
-  private InputFormatBuilderImplTest<InputFormatBuilderTest> formatBuilderTest;
+	private InputTableConfig tableQueryConfig;
+	private InputFormatBuilderImpl<InputFormatBuilderTest> formatBuilderTest;
+	private String currentTable;
+	private SortedMap<String, InputTableConfig> tableConfigMap = new TreeMap<>();
+	private SortedMap<String, String> newHints = new TreeMap<>();
 
-  @Before
-  public void setUp() {
-    tableQueryConfig = new InputTableConfig();
-    formatBuilderTest = new InputFormatBuilderImplTest<>(InputFormatBuilderTest.class);
-    formatBuilderTest.table("test");
-  }
+	@Before
+	public void setUp() {
+		tableQueryConfig = new InputTableConfig();
+		formatBuilderTest = new InputFormatBuilderImplTest<>(InputFormatBuilderTest.class);
+		formatBuilderTest = Mockito.spy(new InputFormatBuilderImpl(InputFormatBuilderTest.class));
+		Mockito.when(formatBuilderTest.table(Mockito.anyString())).thenAnswer(invo -> {
+			String tableName = (String) invo.getArguments()[0];
+			currentTable = tableName;
+			tableConfigMap.put(currentTable, new InputTableConfig());
+			return formatBuilderTest;
+		});
+		Mockito.when(formatBuilderTest.classLoaderContext(Mockito.anyString())).thenAnswer(invo -> {
+			String context = (String) invo.getArguments()[0];
+			tableConfigMap.get(currentTable).setContext(context);
+			return formatBuilderTest;
+		});
+		Mockito.doAnswer(invo -> {
+			Map<String, String> hints = (Map<String, String>) invo.getArguments()[0];
+			this.newHints.putAll(hints);
+			tableConfigMap.get(currentTable).setExecutionHints(hints);
+			return formatBuilderTest;
+		}).when(formatBuilderTest).executionHints(Mockito.anyMap());
+		formatBuilderTest.table("test");
+	}
 
-  @Test
-  public void testInputFormatBuilder_ClassLoaderContext() {
-    String context = "classLoaderContext";
+	@Test
+	public void testInputFormatBuilder_ClassLoaderContext() {
+		String context = "classLoaderContext";
 
-    InputFormatBuilderImpl<JobConf> formatBuilder =
-        new InputFormatBuilderImpl<>(InputFormatBuilderTest.class);
-    formatBuilder.table("test");
-    formatBuilder.classLoaderContext(context);
+		InputFormatBuilderImpl<JobConf> formatBuilder = new InputFormatBuilderImpl<>(InputFormatBuilderTest.class);
+		formatBuilder.table("test");
+		formatBuilder.classLoaderContext(context);
 
-    Optional<String> classLoaderContextStr = tableQueryConfig.getContext();
-    assertTrue(classLoaderContextStr.toString().contains("empty")); // returns Optional.empty
-  }
+		Optional<String> classLoaderContextStr = tableQueryConfig.getContext();
+		assertTrue(classLoaderContextStr.toString().contains("empty")); // returns
+																		// Optional.empty
+	}
 
-  @Test
-  public void testInputFormatBuilderImplTest_ClassLoaderContext() {
-    String context = "classLoaderContext";
+	@Test
+	public void testInputFormatBuilderImplTest_ClassLoaderContext() {
+		String context = "classLoaderContext";
 
-    formatBuilderTest.classLoaderContext(context);
+		formatBuilderTest.classLoaderContext(context);
 
-    Optional<String> classLoaderContextStr = formatBuilderTest.getClassLoaderContext();
-    assertEquals(context, classLoaderContextStr.get());
-  }
+		Optional<String> classLoaderContextStr = tableConfigMap.get(currentTable).getContext();
+		assertEquals(context, classLoaderContextStr.get());
+	}
 
-  @Test
-  public void testInputFormatBuilderImplTest_ExecuteHints() {
-    SortedMap<String,String> hints = new TreeMap<>();
-    hints.put("key1", "value1");
-    hints.put("key2", "value2");
-    hints.put("key3", "value3");
+	@Test
+	public void testInputFormatBuilderImplTest_ExecuteHints() {
+		SortedMap<String, String> hints = new TreeMap<>();
+		hints.put("key1", "value1");
+		hints.put("key2", "value2");
+		hints.put("key3", "value3");
 
-    formatBuilderTest.executionHints(hints);
+		formatBuilderTest.executionHints(hints);
 
-    SortedMap<String,String> executionHints = formatBuilderTest.getExecutionHints();
-    assertEquals(hints.toString(), executionHints.toString());
-  }
+		SortedMap<String, String> executionHints = newHints;
+		assertEquals(hints.toString(), executionHints.toString());
+	}
 }

@@ -48,147 +48,155 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.easymock.EasyMock;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class BulkImporterTest {
 
-  static final SortedSet<KeyExtent> fakeMetaData = new TreeSet<>();
-  static final TableId tableId = TableId.of("1");
+	static final SortedSet<KeyExtent> fakeMetaData = new TreeSet<>();
+	static final TableId tableId = TableId.of("1");
 
-  static {
-    fakeMetaData.add(new KeyExtent(tableId, new Text("a"), null));
-    for (String part : new String[] {"b", "bm", "c", "cm", "d", "dm", "e", "em", "f", "g", "h", "i",
-        "j", "k", "l"}) {
-      fakeMetaData.add(new KeyExtent(tableId, new Text(part), fakeMetaData.last().getEndRow()));
-    }
-    fakeMetaData.add(new KeyExtent(tableId, null, fakeMetaData.last().getEndRow()));
-  }
+	static {
+		fakeMetaData.add(new KeyExtent(tableId, new Text("a"), null));
+		for (String part : new String[] { "b", "bm", "c", "cm", "d", "dm", "e", "em", "f", "g", "h", "i", "j", "k",
+				"l" }) {
+			fakeMetaData.add(new KeyExtent(tableId, new Text(part), fakeMetaData.last().getEndRow()));
+		}
+		fakeMetaData.add(new KeyExtent(tableId, null, fakeMetaData.last().getEndRow()));
+	}
 
-  class MockTabletLocator extends TabletLocator {
-    int invalidated = 0;
+	class MockTabletLocator extends TabletLocator {
+		int invalidated = 0;
 
-    @Override
-    public TabletLocation locateTablet(ClientContext context, Text row, boolean skipRow,
-        boolean retry) {
-      return new TabletLocation(fakeMetaData.tailSet(new KeyExtent(tableId, row, null)).first(),
-          "localhost", "1");
-    }
+		@Override
+		public void invalidateCache(KeyExtent failedExtent) {
+			invalidated++;
+		}
 
-    @Override
-    public <T extends Mutation> void binMutations(ClientContext context, List<T> mutations,
-        Map<String,TabletServerMutations<T>> binnedMutations, List<T> failures) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public TabletLocation locateTablet(ClientContext context, Text row, boolean skipRow, boolean retry) {
+			return new TabletLocation(fakeMetaData.tailSet(new KeyExtent(tableId, row, null)).first(), "localhost",
+					"1");
+		}
 
-    @Override
-    public List<Range> binRanges(ClientContext context, List<Range> ranges,
-        Map<String,Map<KeyExtent,List<Range>>> binnedRanges) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public <T extends Mutation> void binMutations(ClientContext context, List<T> mutations,
+				Map<String, TabletServerMutations<T>> binnedMutations, List<T> failures) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void invalidateCache(KeyExtent failedExtent) {
-      invalidated++;
-    }
+		@Override
+		public List<Range> binRanges(ClientContext context, List<Range> ranges,
+				Map<String, Map<KeyExtent, List<Range>>> binnedRanges) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void invalidateCache(Collection<KeyExtent> keySet) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void invalidateCache(Collection<KeyExtent> keySet) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void invalidateCache() {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void invalidateCache() {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void invalidateCache(ClientContext context, String server) {
-      throw new UnsupportedOperationException();
-    }
-  }
+		@Override
+		public void invalidateCache(ClientContext context, String server) {
+			throw new UnsupportedOperationException();
+		}
+	}
 
-  @Test
-  public void testFindOverlappingTablets() throws Exception {
-    MockTabletLocator locator = new MockTabletLocator();
-    FileSystem fs = FileSystem.getLocal(new Configuration());
-    ServerContext context = EasyMock.createMock(ServerContext.class);
-    EasyMock.expect(context.getConfiguration()).andReturn(DefaultConfiguration.getInstance())
-        .anyTimes();
-    EasyMock.expect(context.getCryptoService()).andReturn(CryptoServiceFactory.newDefaultInstance())
-        .anyTimes();
-    EasyMock.replay(context);
-    String file = "target/testFile.rf";
-    fs.delete(new Path(file), true);
-    FileSKVWriter writer = FileOperations.getInstance().newWriterBuilder()
-        .forFile(file, fs, fs.getConf(), CryptoServiceFactory.newDefaultInstance())
-        .withTableConfiguration(context.getConfiguration()).build();
-    writer.startDefaultLocalityGroup();
-    Value empty = new Value(new byte[] {});
-    writer.append(new Key("a", "cf", "cq"), empty);
-    writer.append(new Key("a", "cf", "cq1"), empty);
-    writer.append(new Key("a", "cf", "cq2"), empty);
-    writer.append(new Key("a", "cf", "cq3"), empty);
-    writer.append(new Key("a", "cf", "cq4"), empty);
-    writer.append(new Key("a", "cf", "cq5"), empty);
-    writer.append(new Key("d", "cf", "cq"), empty);
-    writer.append(new Key("d", "cf", "cq1"), empty);
-    writer.append(new Key("d", "cf", "cq2"), empty);
-    writer.append(new Key("d", "cf", "cq3"), empty);
-    writer.append(new Key("d", "cf", "cq4"), empty);
-    writer.append(new Key("d", "cf", "cq5"), empty);
-    writer.append(new Key("dd", "cf", "cq1"), empty);
-    writer.append(new Key("ichabod", "cf", "cq"), empty);
-    writer.append(new Key("icky", "cf", "cq1"), empty);
-    writer.append(new Key("iffy", "cf", "cq2"), empty);
-    writer.append(new Key("internal", "cf", "cq3"), empty);
-    writer.append(new Key("is", "cf", "cq4"), empty);
-    writer.append(new Key("iterator", "cf", "cq5"), empty);
-    writer.append(new Key("xyzzy", "cf", "cq"), empty);
-    writer.close();
-    VolumeManager vm = VolumeManagerImpl.get(context.getConfiguration(), new Configuration());
-    List<TabletLocation> overlaps =
-        BulkImporter.findOverlappingTablets(context, vm, locator, new Path(file));
-    assertEquals(5, overlaps.size());
-    Collections.sort(overlaps);
-    assertEquals(new KeyExtent(tableId, new Text("a"), null), overlaps.get(0).tablet_extent);
-    assertEquals(new KeyExtent(tableId, new Text("d"), new Text("cm")),
-        overlaps.get(1).tablet_extent);
-    assertEquals(new KeyExtent(tableId, new Text("dm"), new Text("d")),
-        overlaps.get(2).tablet_extent);
-    assertEquals(new KeyExtent(tableId, new Text("j"), new Text("i")),
-        overlaps.get(3).tablet_extent);
-    assertEquals(new KeyExtent(tableId, null, new Text("l")), overlaps.get(4).tablet_extent);
+	@Test
+	public void testFindOverlappingTablets() throws Exception {
+		TabletLocator locator = Mockito.mock(TabletLocator.class, Mockito.CALLS_REAL_METHODS);
+		Mockito.when(locator.locateTablet(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean()))
+				.thenAnswer(invo -> {
+					Text row = invo.getArgument(1);
+					return new TabletLocation(fakeMetaData.tailSet(new KeyExtent(tableId, row, null)).first(),
+							"localhost", "1");
+				});
+		Mockito.doThrow(new UnsupportedOperationException()).when(locator).binMutations(Mockito.any(),
+				Mockito.anyList(), Mockito.anyMap(), Mockito.anyList());
+		Mockito.doThrow(new UnsupportedOperationException()).when(locator).binRanges(Mockito.any(), Mockito.anyList(),
+				Mockito.anyMap());
+		Mockito.doNothing().when(locator).invalidateCache(Mockito.any(KeyExtent.class));
+		Mockito.doThrow(new UnsupportedOperationException()).when(locator).invalidateCache(Mockito.anyCollection());
+		Mockito.doThrow(new UnsupportedOperationException()).when(locator).invalidateCache();
+		Mockito.doThrow(new UnsupportedOperationException()).when(locator).invalidateCache(Mockito.any(),
+				Mockito.anyString());
+		FileSystem fs = FileSystem.getLocal(new Configuration());
+		ServerContext context = EasyMock.createMock(ServerContext.class);
+		EasyMock.expect(context.getConfiguration()).andReturn(DefaultConfiguration.getInstance()).anyTimes();
+		EasyMock.expect(context.getCryptoService()).andReturn(CryptoServiceFactory.newDefaultInstance()).anyTimes();
+		EasyMock.replay(context);
+		String file = "target/testFile.rf";
+		fs.delete(new Path(file), true);
+		FileSKVWriter writer = FileOperations.getInstance().newWriterBuilder()
+				.forFile(file, fs, fs.getConf(), CryptoServiceFactory.newDefaultInstance())
+				.withTableConfiguration(context.getConfiguration()).build();
+		writer.startDefaultLocalityGroup();
+		Value empty = new Value(new byte[] {});
+		writer.append(new Key("a", "cf", "cq"), empty);
+		writer.append(new Key("a", "cf", "cq1"), empty);
+		writer.append(new Key("a", "cf", "cq2"), empty);
+		writer.append(new Key("a", "cf", "cq3"), empty);
+		writer.append(new Key("a", "cf", "cq4"), empty);
+		writer.append(new Key("a", "cf", "cq5"), empty);
+		writer.append(new Key("d", "cf", "cq"), empty);
+		writer.append(new Key("d", "cf", "cq1"), empty);
+		writer.append(new Key("d", "cf", "cq2"), empty);
+		writer.append(new Key("d", "cf", "cq3"), empty);
+		writer.append(new Key("d", "cf", "cq4"), empty);
+		writer.append(new Key("d", "cf", "cq5"), empty);
+		writer.append(new Key("dd", "cf", "cq1"), empty);
+		writer.append(new Key("ichabod", "cf", "cq"), empty);
+		writer.append(new Key("icky", "cf", "cq1"), empty);
+		writer.append(new Key("iffy", "cf", "cq2"), empty);
+		writer.append(new Key("internal", "cf", "cq3"), empty);
+		writer.append(new Key("is", "cf", "cq4"), empty);
+		writer.append(new Key("iterator", "cf", "cq5"), empty);
+		writer.append(new Key("xyzzy", "cf", "cq"), empty);
+		writer.close();
+		VolumeManager vm = VolumeManagerImpl.get(context.getConfiguration(), new Configuration());
+		List<TabletLocation> overlaps = BulkImporter.findOverlappingTablets(context, vm, locator, new Path(file));
+		assertEquals(5, overlaps.size());
+		Collections.sort(overlaps);
+		assertEquals(new KeyExtent(tableId, new Text("a"), null), overlaps.get(0).tablet_extent);
+		assertEquals(new KeyExtent(tableId, new Text("d"), new Text("cm")), overlaps.get(1).tablet_extent);
+		assertEquals(new KeyExtent(tableId, new Text("dm"), new Text("d")), overlaps.get(2).tablet_extent);
+		assertEquals(new KeyExtent(tableId, new Text("j"), new Text("i")), overlaps.get(3).tablet_extent);
+		assertEquals(new KeyExtent(tableId, null, new Text("l")), overlaps.get(4).tablet_extent);
 
-    List<TabletLocation> overlaps2 = BulkImporter.findOverlappingTablets(context, vm, locator,
-        new Path(file), new KeyExtent(tableId, new Text("h"), new Text("b")));
-    assertEquals(3, overlaps2.size());
-    assertEquals(new KeyExtent(tableId, new Text("d"), new Text("cm")),
-        overlaps2.get(0).tablet_extent);
-    assertEquals(new KeyExtent(tableId, new Text("dm"), new Text("d")),
-        overlaps2.get(1).tablet_extent);
-    assertEquals(new KeyExtent(tableId, new Text("j"), new Text("i")),
-        overlaps2.get(2).tablet_extent);
-    assertEquals(locator.invalidated, 1);
-  }
+		List<TabletLocation> overlaps2 = BulkImporter.findOverlappingTablets(context, vm, locator, new Path(file),
+				new KeyExtent(tableId, new Text("h"), new Text("b")));
+		assertEquals(3, overlaps2.size());
+		assertEquals(new KeyExtent(tableId, new Text("d"), new Text("cm")), overlaps2.get(0).tablet_extent);
+		assertEquals(new KeyExtent(tableId, new Text("dm"), new Text("d")), overlaps2.get(1).tablet_extent);
+		assertEquals(new KeyExtent(tableId, new Text("j"), new Text("i")), overlaps2.get(2).tablet_extent);
+		// assertEquals(locator.invalidated, 1);
+		Mockito.verify(locator, Mockito.times(1)).invalidateCache(Mockito.any(KeyExtent.class));
+	}
 
-  @Test
-  public void testSequentialTablets() {
-    // ACCUMULO-3967 make sure that the startRow we compute in BulkImporter is actually giving
-    // a correct startRow so that findOverlappingTablets works as intended.
+	@Test
+	public void testSequentialTablets() {
+		// ACCUMULO-3967 make sure that the startRow we compute in BulkImporter
+		// is actually giving
+		// a correct startRow so that findOverlappingTablets works as intended.
 
-    // 1;2;1
-    KeyExtent extent = new KeyExtent(TableId.of("1"), new Text("2"), new Text("1"));
-    assertEquals(new Text("1\0"), BulkImporter.getStartRowForExtent(extent));
+		// 1;2;1
+		KeyExtent extent = new KeyExtent(TableId.of("1"), new Text("2"), new Text("1"));
+		assertEquals(new Text("1\0"), BulkImporter.getStartRowForExtent(extent));
 
-    // 1;2<
-    extent = new KeyExtent(TableId.of("1"), new Text("2"), null);
-    assertNull(BulkImporter.getStartRowForExtent(extent));
+		// 1;2<
+		extent = new KeyExtent(TableId.of("1"), new Text("2"), null);
+		assertNull(BulkImporter.getStartRowForExtent(extent));
 
-    // 1<<
-    extent = new KeyExtent(TableId.of("1"), null, null);
-    assertNull(BulkImporter.getStartRowForExtent(extent));
+		// 1<<
+		extent = new KeyExtent(TableId.of("1"), null, null);
+		assertNull(BulkImporter.getStartRowForExtent(extent));
 
-    // 1;8;7777777
-    extent = new KeyExtent(TableId.of("1"), new Text("8"), new Text("7777777"));
-    assertEquals(new Text("7777777\0"), BulkImporter.getStartRowForExtent(extent));
-  }
+		// 1;8;7777777
+		extent = new KeyExtent(TableId.of("1"), new Text("8"), new Text("7777777"));
+		assertEquals(new Text("7777777\0"), BulkImporter.getStartRowForExtent(extent));
+	}
 }

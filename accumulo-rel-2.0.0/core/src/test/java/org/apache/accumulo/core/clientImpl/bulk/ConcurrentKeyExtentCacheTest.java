@@ -37,98 +37,122 @@ import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.hadoop.io.Text;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.util.concurrent.Uninterruptibles;
 
 public class ConcurrentKeyExtentCacheTest {
 
-  private static List<KeyExtent> extents = new ArrayList<>();
-  private static Set<KeyExtent> extentsSet = new HashSet<>();
+	private static List<KeyExtent> extents = new ArrayList<>();
+	private static Set<KeyExtent> extentsSet = new HashSet<>();
 
-  @BeforeClass
-  public static void setupSplits() {
-    Text prev = null;
-    for (int i = 1; i < 255; i++) {
-      Text endRow = new Text(String.format("%02x", i));
-      extents.add(new KeyExtent(TableId.of("1"), endRow, prev));
-      prev = endRow;
-    }
+	@BeforeClass
+	public static void setupSplits() {
+		Text prev = null;
+		for (int i = 1; i < 255; i++) {
+			Text endRow = new Text(String.format("%02x", i));
+			extents.add(new KeyExtent(TableId.of("1"), endRow, prev));
+			prev = endRow;
+		}
 
-    extents.add(new KeyExtent(TableId.of("1"), null, prev));
+		extents.add(new KeyExtent(TableId.of("1"), null, prev));
 
-    extentsSet.addAll(extents);
-  }
+		extentsSet.addAll(extents);
+	}
 
-  private static class TestCache extends ConcurrentKeyExtentCache {
+	private static class TestCache extends ConcurrentKeyExtentCache {
 
-    ConcurrentSkipListSet<KeyExtent> seen = new ConcurrentSkipListSet<>();
+		ConcurrentSkipListSet<KeyExtent> seen = new ConcurrentSkipListSet<>();
 
-    TestCache() {
-      super(null, null);
-    }
+		TestCache() {
+			super(null, null);
+		}
 
-    @Override
-    protected void updateCache(KeyExtent e) {
-      super.updateCache(e);
-      assertTrue(seen.add(e));
-    }
+		@Override
+		protected void updateCache(KeyExtent e) {
+			super.updateCache(e);
+			assertTrue(seen.add(e));
+		}
 
-    @Override
-    protected Stream<KeyExtent> lookupExtents(Text row) {
-      int index = -1;
-      for (int i = 0; i < extents.size(); i++) {
-        if (extents.get(i).contains(row)) {
-          index = i;
-          break;
-        }
-      }
+		@Override
+		protected Stream<KeyExtent> lookupExtents(Text row) {
+			int index = -1;
+			for (int i = 0; i < extents.size(); i++) {
+				if (extents.get(i).contains(row)) {
+					index = i;
+					break;
+				}
+			}
 
-      Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+			Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
 
-      return extents.subList(index, extents.size()).stream().limit(73);
-    }
-  }
+			return extents.subList(index, extents.size()).stream().limit(73);
+		}
+	}
 
-  private void testLookup(TestCache tc, Text lookupRow) {
-    try {
-      KeyExtent extent = tc.lookup(lookupRow);
-      assertTrue(extent.contains(lookupRow));
-      assertTrue(extentsSet.contains(extent));
-    } catch (AccumuloException | AccumuloSecurityException | TableNotFoundException e) {
-      throw new RuntimeException(e);
-    }
-  }
+	private void testLookup(ConcurrentKeyExtentCache tc, Text lookupRow) {
+		try {
+			KeyExtent extent = tc.lookup(lookupRow);
+			assertTrue(extent.contains(lookupRow));
+			assertTrue(extentsSet.contains(extent));
+		} catch (AccumuloException | AccumuloSecurityException | TableNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
-  @Test
-  public void testExactEndRows() {
-    Random rand = new SecureRandom();
+	@Test
+	public void testExactEndRows() {
+		Random rand = new SecureRandom();
 
-    TestCache tc = new TestCache();
+		TestCache tc = new TestCache();
 
-    rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).sequential()
-        .forEach(lookupRow -> testLookup(tc, lookupRow));
-    assertEquals(extentsSet, tc.seen);
+		rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).sequential()
+				.forEach(lookupRow -> testLookup(tc, lookupRow));
+		assertEquals(extentsSet, tc.seen);
 
-    // try parallel
-    TestCache tc2 = new TestCache();
-    rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).parallel()
-        .forEach(lookupRow -> testLookup(tc2, lookupRow));
-    assertEquals(extentsSet, tc.seen);
-  }
+		// try parallel
+		TestCache tc2 = new TestCache();
+		rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).parallel()
+				.forEach(lookupRow -> testLookup(tc2, lookupRow));
+		assertEquals(extentsSet, tc.seen);
+	}
 
-  @Test
-  public void testRandom() {
-    TestCache tc = new TestCache();
+	@Test
+	public void testRandom() {
+		ConcurrentSkipListSet<KeyExtent> seen = new ConcurrentSkipListSet<>();
+		ConcurrentSkipListSet<KeyExtent> seen2 = new ConcurrentSkipListSet<>();
+		ConcurrentKeyExtentCache tc = Mockito.spy(new ConcurrentKeyExtentCache(null, null));
+		Mockito.doAnswer(invo -> {
+			KeyExtent e = invo.getArgument(0);
+			invo.callRealMethod();
+			assertTrue(seen.add(e));
+			return null;
+		}).when(tc).updateCache(Mockito.any());
+		try {
+			Mockito.doAnswer(invo -> {
+				Text row = invo.getArgument(0);
+				int index = -1;
+				for (int i = 0; i < extents.size(); i++) {
+					if (extents.get(i).contains(row)) {
+						index = i;
+						break;
+					}
+				}
+				Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+				return extents.subList(index, extents.size()).stream().limit(73);
+			}).when(tc).lookupExtents(Mockito.any());
+		} catch (TableNotFoundException | AccumuloException | AccumuloSecurityException e) {
+			e.printStackTrace();
+		}
+		Random rand = new SecureRandom();
+		rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).sequential()
+				.forEach(lookupRow -> testLookup(tc, lookupRow));
+		assertEquals(extentsSet, seen);
 
-    Random rand = new SecureRandom();
-    rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).sequential()
-        .forEach(lookupRow -> testLookup(tc, lookupRow));
-    assertEquals(extentsSet, tc.seen);
-
-    // try parallel
-    TestCache tc2 = new TestCache();
-    rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).parallel()
-        .forEach(lookupRow -> testLookup(tc2, lookupRow));
-    assertEquals(extentsSet, tc2.seen);
-  }
+		// try parallel
+		TestCache tc2 = new TestCache();
+		rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).parallel()
+				.forEach(lookupRow -> testLookup(tc2, lookupRow));
+		assertEquals(extentsSet, tc2.seen);
+	}
 }

@@ -38,6 +38,7 @@ import org.apache.accumulo.core.replication.ReplicationSchema.StatusSection;
 import org.apache.accumulo.server.replication.proto.Replication.Status;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class StatusCombinerTest {
 
@@ -59,7 +60,11 @@ public class StatusCombinerTest {
 		builder = Status.newBuilder();
 		IteratorSetting cfg = new IteratorSetting(50, StatusCombiner.class);
 		Combiner.setColumns(cfg, Collections.singletonList(new Column(StatusSection.NAME)));
-		combiner.init(new DevNull(), cfg.getOptions(), new TestIE());
+		IteratorEnvironment ie = Mockito.spy(IteratorEnvironment.class);
+		Mockito.doAnswer(invo -> {
+			return IteratorScope.scan;
+		}).when(ie).getIteratorScope();
+		combiner.init(new DevNull(), cfg.getOptions(), ie);
 	}
 
 	@Test

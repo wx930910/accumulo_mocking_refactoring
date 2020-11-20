@@ -19,29 +19,27 @@ package org.apache.accumulo.core.cli;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class TestHelp {
-  protected class HelpStub extends Help {
-    @Override
-    public void parseArgs(String programName, String[] args, Object... others) {
-      super.parseArgs(programName, args, others);
-    }
 
-    @Override
-    public void exit(int status) {
-      throw new RuntimeException(Integer.toString(status));
-    }
-  }
-
-  @Test
-  public void testInvalidArgs() {
-    String[] args = {"foo"};
-    HelpStub help = new HelpStub();
-    try {
-      help.parseArgs("program", args);
-    } catch (RuntimeException e) {
-      assertEquals("1", e.getMessage());
-    }
-  }
+	@Test
+	public void testInvalidArgs() {
+		String[] args = { "foo" };
+		Help help = Mockito.spy(new Help());
+		Mockito.doAnswer(invo -> {
+			invo.callRealMethod();
+			return null;
+		}).when(help).parseArgs(Mockito.anyString(), Mockito.any(), Mockito.anyIterable());
+		Mockito.doAnswer(invo -> {
+			int status = invo.getArgument(0);
+			throw new RuntimeException(Integer.toString(status));
+		}).when(help).exit(Mockito.anyInt());
+		try {
+			help.parseArgs("program", args);
+		} catch (RuntimeException e) {
+			assertEquals("1", e.getMessage());
+		}
+	}
 
 }

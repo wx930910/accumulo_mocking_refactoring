@@ -47,297 +47,398 @@ import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class TableOperationsHelperTest {
 
-  static class Tester extends TableOperationsHelper {
-    Map<String,Map<String,String>> settings = new HashMap<>();
+	private TableOperationsHelper mockTableOperationsHelper() {
+		Map<String, Map<String, String>> settings = new HashMap<>();
+		TableOperationsHelper res = Mockito.mock(TableOperationsHelper.class);
+		Mockito.when(res.list()).thenReturn(null);
+		Mockito.when(res.exists(Mockito.anyString())).thenReturn(true);
+		try {
+			Mockito.doNothing().when(res).create(Mockito.anyString());
+			Mockito.doNothing().when(res).create(Mockito.anyString(), Mockito.any());
+			Mockito.doNothing().when(res).addSplits(Mockito.anyString(), Mockito.any());
+			Mockito.doReturn(null).when(res).listSplits(Mockito.anyString());
+			Mockito.doReturn(null).when(res).listSplits(Mockito.anyString(), Mockito.anyInt());
+			Mockito.when(res.getMaxRow(Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.anyBoolean(),
+					Mockito.any(), Mockito.anyBoolean()));
+			Mockito.doNothing().when(res).merge(Mockito.anyString(), Mockito.any(), Mockito.any());
+			Mockito.doNothing().when(res).deleteRows(Mockito.anyString(), Mockito.any(), Mockito.any());
+			Mockito.doNothing().when(res).compact(Mockito.anyString(), Mockito.any(), Mockito.any(),
+					Mockito.anyBoolean(), Mockito.anyBoolean());
+			Mockito.doNothing().when(res).compact(Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.anyList(),
+					Mockito.anyBoolean(), Mockito.anyBoolean());
+			Mockito.doNothing().when(res).compact(Mockito.anyString(), Mockito.any());
+			Mockito.doNothing().when(res).delete(Mockito.anyString());
+			Mockito.doNothing().when(res).clone(Mockito.anyString(), Mockito.anyString(), Mockito.anyBoolean(),
+					Mockito.anyMap(), Mockito.anySet());
+			Mockito.doNothing().when(res).rename(Mockito.anyString(), Mockito.anyString());
+			Mockito.doNothing().when(res).flush(Mockito.anyString());
+			Mockito.doNothing().when(res).flush(Mockito.anyString(), Mockito.any(), Mockito.any(),
+					Mockito.anyBoolean());
+			Mockito.doNothing().when(res).setLocalityGroups(Mockito.anyString(), Mockito.anyMap());
+			Mockito.when(res.getLocalityGroups(Mockito.anyString())).thenReturn(null);
+			Mockito.when(res.splitRangeByTablets(Mockito.anyString(), Mockito.any(), Mockito.anyInt()))
+					.thenReturn(null);
+			Mockito.doNothing().when(res).importDirectory(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+					Mockito.anyBoolean());
+			Mockito.doNothing().when(res).offline(Mockito.anyString());
+			Mockito.doNothing().when(res).online(Mockito.anyString());
+			Mockito.doNothing().when(res).offline(Mockito.anyString(), Mockito.anyBoolean());
+			Mockito.doNothing().when(res).online(Mockito.anyString(), Mockito.anyBoolean());
+			Mockito.doNothing().when(res).clearLocatorCache(Mockito.anyString());
+			Mockito.when(res.tableIdMap()).thenReturn(null);
+			Mockito.when(res.getDiskUsage(Mockito.anySet())).thenReturn(null);
+			Mockito.doNothing().when(res).importTable(Mockito.anyString(), Mockito.anyString());
+			Mockito.doNothing().when(res).exportTable(Mockito.anyString(), Mockito.anyString());
+			Mockito.doNothing().when(res).cancelCompaction(Mockito.anyString());
+			Mockito.when(res.testClassLoad(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+					.thenReturn(false);
 
-    @Override
-    public SortedSet<String> list() {
-      return null;
-    }
+			Mockito.doAnswer(invo -> {
+				String tableName = invo.getArgument(0);
+				String property = invo.getArgument(1);
+				String value = invo.getArgument(2);
+				if (!settings.containsKey(tableName)) settings.put(tableName, new TreeMap<>());
+				settings.get(tableName).put(property, value);
+				return null;
+			}).when(res).setProperty(Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+			Mockito.doAnswer(invo -> {
+				String tableName = invo.getArgument(0);
+				String property = invo.getArgument(1);
+				if (!settings.containsKey(tableName)) return null;
+				settings.get(tableName).remove(property);
+				return null;
+			}).when(res).removeProperty(Mockito.anyString(), Mockito.anyString());
+			Mockito.doAnswer(invo -> {
+				String tableName = invo.getArgument(0);
+				Map<String, String> empty = Collections.emptyMap();
+				if (!settings.containsKey(tableName)) return empty.entrySet();
+				return settings.get(tableName).entrySet();
+			}).when(res).getProperties(Mockito.anyString());
 
-    @Override
-    public boolean exists(String tableName) {
-      return true;
-    }
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).setSamplerConfiguration(Mockito.anyString(),
+					Mockito.any());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res)
+					.clearSamplerConfiguration(Mockito.anyString());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).getSamplerConfiguration(Mockito.anyString());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).locate(Mockito.anyString(),
+					Mockito.anyCollection());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).summaries(Mockito.anyString());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).addSummarizers(Mockito.anyString(),
+					Mockito.anyVararg());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).removeSummarizers(Mockito.anyString(),
+					Mockito.any());
+			Mockito.doThrow(new UnsupportedOperationException()).when(res).listSummarizers(Mockito.anyString());
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return res;
+	}
 
-    @Override
-    public void create(String tableName) {}
+	static class Tester extends TableOperationsHelper {
+		Map<String, Map<String, String>> settings = new HashMap<>();
 
-    @Override
-    public void create(String tableName, NewTableConfiguration ntc) {}
+		@Override
+		public SortedSet<String> list() {
+			return null;
+		}
 
-    @Override
-    public void addSplits(String tableName, SortedSet<Text> partitionKeys) {}
+		@Override
+		public boolean exists(String tableName) {
+			return true;
+		}
 
-    @Override
-    public Collection<Text> listSplits(String tableName) {
-      return null;
-    }
+		@Override
+		public void create(String tableName) {
+		}
 
-    @Override
-    public Collection<Text> listSplits(String tableName, int maxSplits) {
-      return null;
-    }
+		@Override
+		public void create(String tableName, NewTableConfiguration ntc) {
+		}
 
-    @Override
-    public Text getMaxRow(String tableName, Authorizations auths, Text startRow,
-        boolean startInclusive, Text endRow, boolean endInclusive) {
-      return null;
-    }
+		@Override
+		public void addSplits(String tableName, SortedSet<Text> partitionKeys) {
+		}
 
-    @Override
-    public void merge(String tableName, Text start, Text end) {
+		@Override
+		public Collection<Text> listSplits(String tableName) {
+			return null;
+		}
 
-    }
+		@Override
+		public Collection<Text> listSplits(String tableName, int maxSplits) {
+			return null;
+		}
 
-    @Override
-    public void deleteRows(String tableName, Text start, Text end) {}
+		@Override
+		public Text getMaxRow(String tableName, Authorizations auths, Text startRow, boolean startInclusive,
+				Text endRow, boolean endInclusive) {
+			return null;
+		}
 
-    @Override
-    public void compact(String tableName, Text start, Text end, boolean flush, boolean wait) {}
+		@Override
+		public void merge(String tableName, Text start, Text end) {
 
-    @Override
-    public void compact(String tableName, Text start, Text end, List<IteratorSetting> iterators,
-        boolean flush, boolean wait) {}
+		}
 
-    @Override
-    public void compact(String tableName, CompactionConfig config) {}
+		@Override
+		public void deleteRows(String tableName, Text start, Text end) {
+		}
 
-    @Override
-    public void delete(String tableName) {}
+		@Override
+		public void compact(String tableName, Text start, Text end, boolean flush, boolean wait) {
+		}
 
-    @Override
-    public void clone(String srcTableName, String newTableName, boolean flush,
-        Map<String,String> propertiesToSet, Set<String> propertiesToExclude) {}
+		@Override
+		public void compact(String tableName, Text start, Text end, List<IteratorSetting> iterators, boolean flush,
+				boolean wait) {
+		}
 
-    @Override
-    public void rename(String oldTableName, String newTableName) {}
+		@Override
+		public void compact(String tableName, CompactionConfig config) {
+		}
 
-    @Override
-    public void flush(String tableName) {}
+		@Override
+		public void delete(String tableName) {
+		}
 
-    @Override
-    public void flush(String tableName, Text start, Text end, boolean wait) {}
+		@Override
+		public void clone(String srcTableName, String newTableName, boolean flush, Map<String, String> propertiesToSet,
+				Set<String> propertiesToExclude) {
+		}
 
-    @Override
-    public void setProperty(String tableName, String property, String value) {
-      if (!settings.containsKey(tableName))
-        settings.put(tableName, new TreeMap<>());
-      settings.get(tableName).put(property, value);
-    }
+		@Override
+		public void rename(String oldTableName, String newTableName) {
+		}
 
-    @Override
-    public void removeProperty(String tableName, String property) {
-      if (!settings.containsKey(tableName))
-        return;
-      settings.get(tableName).remove(property);
-    }
+		@Override
+		public void flush(String tableName) {
+		}
 
-    @Override
-    public Iterable<Entry<String,String>> getProperties(String tableName) {
-      Map<String,String> empty = Collections.emptyMap();
-      if (!settings.containsKey(tableName))
-        return empty.entrySet();
-      return settings.get(tableName).entrySet();
-    }
+		@Override
+		public void flush(String tableName, Text start, Text end, boolean wait) {
+		}
 
-    @Override
-    public void setLocalityGroups(String tableName, Map<String,Set<Text>> groups) {}
+		@Override
+		public void setProperty(String tableName, String property, String value) {
+			if (!settings.containsKey(tableName)) settings.put(tableName, new TreeMap<>());
+			settings.get(tableName).put(property, value);
+		}
 
-    @Override
-    public Map<String,Set<Text>> getLocalityGroups(String tableName) {
-      return null;
-    }
+		@Override
+		public void removeProperty(String tableName, String property) {
+			if (!settings.containsKey(tableName)) return;
+			settings.get(tableName).remove(property);
+		}
 
-    @Override
-    public Set<Range> splitRangeByTablets(String tableName, Range range, int maxSplits) {
-      return null;
-    }
+		@Override
+		public Iterable<Entry<String, String>> getProperties(String tableName) {
+			Map<String, String> empty = Collections.emptyMap();
+			if (!settings.containsKey(tableName)) return empty.entrySet();
+			return settings.get(tableName).entrySet();
+		}
 
-    @Override
-    @Deprecated
-    public void importDirectory(String tableName, String dir, String failureDir, boolean setTime) {}
+		@Override
+		public void setLocalityGroups(String tableName, Map<String, Set<Text>> groups) {
+		}
 
-    @Override
-    public void offline(String tableName) {
+		@Override
+		public Map<String, Set<Text>> getLocalityGroups(String tableName) {
+			return null;
+		}
 
-    }
+		@Override
+		public Set<Range> splitRangeByTablets(String tableName, Range range, int maxSplits) {
+			return null;
+		}
 
-    @Override
-    public void online(String tableName) {}
+		@Override
+		@Deprecated
+		public void importDirectory(String tableName, String dir, String failureDir, boolean setTime) {
+		}
 
-    @Override
-    public void offline(String tableName, boolean wait) {
+		@Override
+		public void offline(String tableName) {
 
-    }
+		}
 
-    @Override
-    public void online(String tableName, boolean wait) {}
+		@Override
+		public void online(String tableName) {
+		}
 
-    @Override
-    public void clearLocatorCache(String tableName) {}
+		@Override
+		public void offline(String tableName, boolean wait) {
 
-    @Override
-    public Map<String,String> tableIdMap() {
-      return null;
-    }
+		}
 
-    @Override
-    public List<DiskUsage> getDiskUsage(Set<String> tables) {
-      return null;
-    }
+		@Override
+		public void online(String tableName, boolean wait) {
+		}
 
-    @Override
-    public void importTable(String tableName, String exportDir) {}
+		@Override
+		public void clearLocatorCache(String tableName) {
+		}
 
-    @Override
-    public void exportTable(String tableName, String exportDir) {}
+		@Override
+		public Map<String, String> tableIdMap() {
+			return null;
+		}
 
-    @Override
-    public void cancelCompaction(String tableName) {}
+		@Override
+		public List<DiskUsage> getDiskUsage(Set<String> tables) {
+			return null;
+		}
 
-    @Override
-    public boolean testClassLoad(String tableName, String className, String asTypeName) {
-      return false;
-    }
+		@Override
+		public void importTable(String tableName, String exportDir) {
+		}
 
-    @Override
-    public void setSamplerConfiguration(String tableName,
-        SamplerConfiguration samplerConfiguration) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void exportTable(String tableName, String exportDir) {
+		}
 
-    @Override
-    public void clearSamplerConfiguration(String tableName) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void cancelCompaction(String tableName) {
+		}
 
-    @Override
-    public SamplerConfiguration getSamplerConfiguration(String tableName) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public boolean testClassLoad(String tableName, String className, String asTypeName) {
+			return false;
+		}
 
-    @Override
-    public Locations locate(String tableName, Collection<Range> ranges) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void setSamplerConfiguration(String tableName, SamplerConfiguration samplerConfiguration) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public SummaryRetriever summaries(String tableName) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public void clearSamplerConfiguration(String tableName) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void addSummarizers(String tableName, SummarizerConfiguration... summarizerConf) {
-      throw new UnsupportedOperationException();
+		@Override
+		public SamplerConfiguration getSamplerConfiguration(String tableName) {
+			throw new UnsupportedOperationException();
+		}
 
-    }
+		@Override
+		public Locations locate(String tableName, Collection<Range> ranges) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public void removeSummarizers(String tableName, Predicate<SummarizerConfiguration> predicate) {
-      throw new UnsupportedOperationException();
-    }
+		@Override
+		public SummaryRetriever summaries(String tableName) {
+			throw new UnsupportedOperationException();
+		}
 
-    @Override
-    public List<SummarizerConfiguration> listSummarizers(String tableName) {
-      throw new UnsupportedOperationException();
-    }
-  }
+		@Override
+		public void addSummarizers(String tableName, SummarizerConfiguration... summarizerConf) {
+			throw new UnsupportedOperationException();
 
-  protected TableOperationsHelper getHelper() {
-    return new Tester();
-  }
+		}
 
-  void check(TableOperationsHelper t, String tablename, String[] values) throws Exception {
-    Map<String,String> expected = new TreeMap<>();
-    for (String value : values) {
-      String[] parts = value.split("=", 2);
-      expected.put(parts[0], parts[1]);
-    }
-    Map<String,String> actual = new TreeMap<>();
-    for (Entry<String,String> entry : t.getProperties(tablename)) {
-      actual.put(entry.getKey(), entry.getValue());
-    }
-    assertEquals(expected, actual);
-  }
+		@Override
+		public void removeSummarizers(String tableName, Predicate<SummarizerConfiguration> predicate) {
+			throw new UnsupportedOperationException();
+		}
 
-  @Test
-  public void testAttachIterator() throws Exception {
-    TableOperationsHelper t = getHelper();
-    Map<String,String> empty = Collections.emptyMap();
-    t.attachIterator("table", new IteratorSetting(10, "someName", "foo.bar", empty),
-        EnumSet.of(IteratorScope.scan));
-    check(t, "table", new String[] {"table.iterator.scan.someName=10,foo.bar",});
-    t.removeIterator("table", "someName", EnumSet.of(IteratorScope.scan));
-    check(t, "table", new String[] {});
+		@Override
+		public List<SummarizerConfiguration> listSummarizers(String tableName) {
+			throw new UnsupportedOperationException();
+		}
+	}
 
-    IteratorSetting setting = new IteratorSetting(10, "someName", "foo.bar");
-    setting.addOptions(Collections.singletonMap("key", "value"));
-    t.attachIterator("table", setting, EnumSet.of(IteratorScope.majc));
-    setting = new IteratorSetting(10, "someName", "foo.bar");
-    t.attachIterator("table", setting, EnumSet.of(IteratorScope.scan));
-    check(t, "table", new String[] {"table.iterator.majc.someName=10,foo.bar",
-        "table.iterator.majc.someName.opt.key=value", "table.iterator.scan.someName=10,foo.bar",});
+	protected TableOperationsHelper getHelper() {
+		return mockTableOperationsHelper();
+	}
 
-    t.removeIterator("table", "someName", EnumSet.of(IteratorScope.scan));
-    setting = new IteratorSetting(20, "otherName", "some.classname");
-    setting.addOptions(Collections.singletonMap("key", "value"));
-    t.attachIterator("table", setting, EnumSet.of(IteratorScope.majc));
-    setting = new IteratorSetting(20, "otherName", "some.classname");
-    t.attachIterator("table", setting, EnumSet.of(IteratorScope.scan));
-    Map<String,EnumSet<IteratorScope>> two = t.listIterators("table");
-    assertEquals(2, two.size());
-    assertTrue(two.containsKey("otherName"));
-    assertEquals(2, two.get("otherName").size());
-    assertTrue(two.get("otherName").contains(IteratorScope.majc));
-    assertTrue(two.get("otherName").contains(IteratorScope.scan));
-    assertTrue(two.containsKey("someName"));
-    assertEquals(1, two.get("someName").size());
-    assertTrue(two.get("someName").contains(IteratorScope.majc));
-    t.removeIterator("table", "someName", EnumSet.allOf(IteratorScope.class));
-    check(t, "table",
-        new String[] {"table.iterator.majc.otherName=20,some.classname",
-            "table.iterator.majc.otherName.opt.key=value",
-            "table.iterator.scan.otherName=20,some.classname",});
+	void check(TableOperationsHelper t, String tablename, String[] values) throws Exception {
+		Map<String, String> expected = new TreeMap<>();
+		for (String value : values) {
+			String[] parts = value.split("=", 2);
+			expected.put(parts[0], parts[1]);
+		}
+		Map<String, String> actual = new TreeMap<>();
+		for (Entry<String, String> entry : t.getProperties(tablename)) {
+			actual.put(entry.getKey(), entry.getValue());
+		}
+		assertEquals(expected, actual);
+	}
 
-    setting = t.getIteratorSetting("table", "otherName", IteratorScope.scan);
-    assertEquals(20, setting.getPriority());
-    assertEquals("some.classname", setting.getIteratorClass());
-    assertTrue(setting.getOptions().isEmpty());
-    setting = t.getIteratorSetting("table", "otherName", IteratorScope.majc);
-    assertEquals(20, setting.getPriority());
-    assertEquals("some.classname", setting.getIteratorClass());
-    assertFalse(setting.getOptions().isEmpty());
-    assertEquals(Collections.singletonMap("key", "value"), setting.getOptions());
-    t.attachIterator("table", setting, EnumSet.of(IteratorScope.minc));
-    check(t, "table",
-        new String[] {"table.iterator.majc.otherName=20,some.classname",
-            "table.iterator.majc.otherName.opt.key=value",
-            "table.iterator.minc.otherName=20,some.classname",
-            "table.iterator.minc.otherName.opt.key=value",
-            "table.iterator.scan.otherName=20,some.classname",});
+	@Test
+	public void testAttachIterator() throws Exception {
+		TableOperationsHelper t = getHelper();
+		Map<String, String> empty = Collections.emptyMap();
+		t.attachIterator("table", new IteratorSetting(10, "someName", "foo.bar", empty),
+				EnumSet.of(IteratorScope.scan));
+		check(t, "table", new String[] { "table.iterator.scan.someName=10,foo.bar", });
+		t.removeIterator("table", "someName", EnumSet.of(IteratorScope.scan));
+		check(t, "table", new String[] {});
 
-    try {
-      t.attachIterator("table", setting);
-      fail();
-    } catch (AccumuloException e) {
-      // expected, ignore
-    }
-    setting.setName("thirdName");
-    try {
-      t.attachIterator("table", setting);
-      fail();
-    } catch (AccumuloException e) {}
-    setting.setPriority(10);
-    t.setProperty("table", "table.iterator.minc.thirdName.opt.key", "value");
-    try {
-      t.attachIterator("table", setting);
-      fail();
-    } catch (AccumuloException e) {}
-    t.removeProperty("table", "table.iterator.minc.thirdName.opt.key");
-    t.attachIterator("table", setting);
-  }
+		IteratorSetting setting = new IteratorSetting(10, "someName", "foo.bar");
+		setting.addOptions(Collections.singletonMap("key", "value"));
+		t.attachIterator("table", setting, EnumSet.of(IteratorScope.majc));
+		setting = new IteratorSetting(10, "someName", "foo.bar");
+		t.attachIterator("table", setting, EnumSet.of(IteratorScope.scan));
+		check(t, "table", new String[] { "table.iterator.majc.someName=10,foo.bar",
+				"table.iterator.majc.someName.opt.key=value", "table.iterator.scan.someName=10,foo.bar", });
+
+		t.removeIterator("table", "someName", EnumSet.of(IteratorScope.scan));
+		setting = new IteratorSetting(20, "otherName", "some.classname");
+		setting.addOptions(Collections.singletonMap("key", "value"));
+		t.attachIterator("table", setting, EnumSet.of(IteratorScope.majc));
+		setting = new IteratorSetting(20, "otherName", "some.classname");
+		t.attachIterator("table", setting, EnumSet.of(IteratorScope.scan));
+		Map<String, EnumSet<IteratorScope>> two = t.listIterators("table");
+		assertEquals(2, two.size());
+		assertTrue(two.containsKey("otherName"));
+		assertEquals(2, two.get("otherName").size());
+		assertTrue(two.get("otherName").contains(IteratorScope.majc));
+		assertTrue(two.get("otherName").contains(IteratorScope.scan));
+		assertTrue(two.containsKey("someName"));
+		assertEquals(1, two.get("someName").size());
+		assertTrue(two.get("someName").contains(IteratorScope.majc));
+		t.removeIterator("table", "someName", EnumSet.allOf(IteratorScope.class));
+		check(t, "table", new String[] { "table.iterator.majc.otherName=20,some.classname",
+				"table.iterator.majc.otherName.opt.key=value", "table.iterator.scan.otherName=20,some.classname", });
+
+		setting = t.getIteratorSetting("table", "otherName", IteratorScope.scan);
+		assertEquals(20, setting.getPriority());
+		assertEquals("some.classname", setting.getIteratorClass());
+		assertTrue(setting.getOptions().isEmpty());
+		setting = t.getIteratorSetting("table", "otherName", IteratorScope.majc);
+		assertEquals(20, setting.getPriority());
+		assertEquals("some.classname", setting.getIteratorClass());
+		assertFalse(setting.getOptions().isEmpty());
+		assertEquals(Collections.singletonMap("key", "value"), setting.getOptions());
+		t.attachIterator("table", setting, EnumSet.of(IteratorScope.minc));
+		check(t, "table", new String[] { "table.iterator.majc.otherName=20,some.classname",
+				"table.iterator.majc.otherName.opt.key=value", "table.iterator.minc.otherName=20,some.classname",
+				"table.iterator.minc.otherName.opt.key=value", "table.iterator.scan.otherName=20,some.classname", });
+
+		try {
+			t.attachIterator("table", setting);
+			fail();
+		} catch (AccumuloException e) {
+			// expected, ignore
+		}
+		setting.setName("thirdName");
+		try {
+			t.attachIterator("table", setting);
+			fail();
+		} catch (AccumuloException e) {
+		}
+		setting.setPriority(10);
+		t.setProperty("table", "table.iterator.minc.thirdName.opt.key", "value");
+		try {
+			t.attachIterator("table", setting);
+			fail();
+		} catch (AccumuloException e) {
+		}
+		t.removeProperty("table", "table.iterator.minc.thirdName.opt.key");
+		t.attachIterator("table", setting);
+	}
 }

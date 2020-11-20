@@ -20,36 +20,45 @@ import static org.junit.Assert.assertEquals;
 
 import java.security.SecureRandom;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.io.CountingOutputStream;
 
 public class RateLimitedOutputStreamTest {
 
-  @Test
-  public void permitsAreProperlyAcquired() throws Exception {
-    Random randGen = new SecureRandom();
-    MockRateLimiter rateLimiter = new MockRateLimiter();
-    long bytesWritten = 0;
-    try (RateLimitedOutputStream os =
-        new RateLimitedOutputStream(new NullOutputStream(), rateLimiter)) {
-      for (int i = 0; i < 100; ++i) {
-        byte[] bytes = new byte[Math.abs(randGen.nextInt() % 65536)];
-        os.write(bytes);
-        bytesWritten += bytes.length;
-      }
-      assertEquals(bytesWritten, os.position());
-    }
-    assertEquals(bytesWritten, rateLimiter.getPermitsAcquired());
-  }
+	@Test
+	public void permitsAreProperlyAcquired() throws Exception {
+		Random randGen = new SecureRandom();
+		final AtomicLong permitsAcquired = new AtomicLong();
+		org.apache.accumulo.core.util.ratelimit.RateLimiter rateLimiter = Mockito
+				.mock(org.apache.accumulo.core.util.ratelimit.RateLimiter.class);
+		Mockito.when(rateLimiter.getRate()).thenReturn((long) 0);
+		Mockito.doAnswer(invo -> {
+			permitsAcquired.addAndGet(invo.getArgument(0));
+			return null;
+		}).when(rateLimiter).acquire(Mockito.anyLong());
 
-  public static class NullOutputStream extends FSDataOutputStream {
-    public NullOutputStream() {
-      super(new CountingOutputStream(ByteStreams.nullOutputStream()), null);
-    }
-  }
+		long bytesWritten = 0;
+		try (RateLimitedOutputStream os = new RateLimitedOutputStream(new NullOutputStream(), rateLimiter)) {
+			for (int i = 0; i < 100; ++i) {
+				byte[] bytes = new byte[Math.abs(randGen.nextInt() % 65536)];
+				os.write(bytes);
+				bytesWritten += bytes.length;
+			}
+			assertEquals(bytesWritten, os.position());
+		}
+		assertEquals(bytesWritten, permitsAcquired.get());
+	}
+
+	public static class NullOutputStream extends FSDataOutputStream {
+		public NullOutputStream() {
+			super(new CountingOutputStream(ByteStreams.nullOutputStream()), null);
+		}
+	}
 
 }

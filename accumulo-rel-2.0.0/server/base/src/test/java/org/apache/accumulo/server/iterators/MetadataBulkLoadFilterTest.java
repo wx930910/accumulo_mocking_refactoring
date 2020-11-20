@@ -37,87 +37,117 @@ import org.apache.accumulo.server.zookeeper.TransactionWatcher.Arbitrator;
 import org.apache.hadoop.io.Text;
 import org.easymock.EasyMock;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class MetadataBulkLoadFilterTest {
-  static class TestArbitrator implements Arbitrator {
-    @Override
-    public boolean transactionAlive(String type, long tid) {
-      return tid == 5;
-    }
+	static class TestArbitrator implements Arbitrator {
+		@Override
+		public boolean transactionAlive(String type, long tid) {
+			return tid == 5;
+		}
 
-    @Override
-    public boolean transactionComplete(String type, long tid) {
-      if (tid == 9)
-        throw new RuntimeException();
-      return tid != 5 && tid != 7;
-    }
-  }
+		@Override
+		public boolean transactionComplete(String type, long tid) {
+			if (tid == 9) throw new RuntimeException();
+			return tid != 5 && tid != 7;
+		}
+	}
 
-  static class TestMetadataBulkLoadFilter extends MetadataBulkLoadFilter {
-    @Override
-    protected Arbitrator getArbitrator(ServerContext context) {
-      return new TestArbitrator();
-    }
-  }
+	static class TestMetadataBulkLoadFilter extends MetadataBulkLoadFilter {
+		@Override
+		protected Arbitrator getArbitrator(ServerContext context) {
+			Arbitrator res = Mockito.mock(Arbitrator.class);
+			try {
+				Mockito.when(res.transactionAlive(Mockito.anyString(), Mockito.anyLong())).thenAnswer(invo -> {
+					long tid = invo.getArgument(1);
+					return tid == 5;
+				});
+				Mockito.when(res.transactionComplete(Mockito.anyString(), Mockito.anyLong())).thenAnswer(invo -> {
+					long tid = invo.getArgument(1);
+					if (tid == 9) throw new RuntimeException();
+					return tid != 5 && tid != 7;
+				});
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 
-  private static void put(TreeMap<Key,Value> tm, String row, ColumnFQ cfq, String val) {
-    Key k = new Key(new Text(row), cfq.getColumnFamily(), cfq.getColumnQualifier());
-    tm.put(k, new Value(val.getBytes()));
-  }
+			return res;
+		}
+	}
 
-  private static void put(TreeMap<Key,Value> tm, String row, Text cf, String cq, String val) {
-    Key k = new Key(new Text(row), cf, new Text(cq));
-    if (val == null) {
-      k.setDeleted(true);
-      tm.put(k, new Value("".getBytes()));
-    } else
-      tm.put(k, new Value(val.getBytes()));
-  }
+	private static void put(TreeMap<Key, Value> tm, String row, ColumnFQ cfq, String val) {
+		Key k = new Key(new Text(row), cfq.getColumnFamily(), cfq.getColumnQualifier());
+		tm.put(k, new Value(val.getBytes()));
+	}
 
-  @Test
-  public void testBasic() throws IOException {
-    TreeMap<Key,Value> tm1 = new TreeMap<>();
-    TreeMap<Key,Value> expected = new TreeMap<>();
+	private static void put(TreeMap<Key, Value> tm, String row, Text cf, String cq, String val) {
+		Key k = new Key(new Text(row), cf, new Text(cq));
+		if (val == null) {
+			k.setDeleted(true);
+			tm.put(k, new Value("".getBytes()));
+		} else tm.put(k, new Value(val.getBytes()));
+	}
 
-    // following should not be deleted by filter
-    put(tm1, "2;m", TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN, "/t1");
-    put(tm1, "2;m", DataFileColumnFamily.NAME, "/t1/file1",
-        new DataFileValue(1, 1).encodeAsString());
-    put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file1", "5");
-    put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file3", "7");
-    put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file4", "9");
-    put(tm1, "2<", TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN, "/t2");
-    put(tm1, "2<", DataFileColumnFamily.NAME, "/t2/file2",
-        new DataFileValue(1, 1).encodeAsString());
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file6", "5");
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file7", "7");
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file8", "9");
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/fileC", null);
+	@Test
+	public void testBasic() throws IOException {
+		TreeMap<Key, Value> tm1 = new TreeMap<>();
+		TreeMap<Key, Value> expected = new TreeMap<>();
 
-    expected.putAll(tm1);
+		// following should not be deleted by filter
+		put(tm1, "2;m", TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN, "/t1");
+		put(tm1, "2;m", DataFileColumnFamily.NAME, "/t1/file1", new DataFileValue(1, 1).encodeAsString());
+		put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file1", "5");
+		put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file3", "7");
+		put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file4", "9");
+		put(tm1, "2<", TabletsSection.ServerColumnFamily.DIRECTORY_COLUMN, "/t2");
+		put(tm1, "2<", DataFileColumnFamily.NAME, "/t2/file2", new DataFileValue(1, 1).encodeAsString());
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file6", "5");
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file7", "7");
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file8", "9");
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/fileC", null);
 
-    // the following should be deleted by filter
-    put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file5", "8");
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file9", "8");
-    put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/fileA", "2");
+		expected.putAll(tm1);
 
-    SystemIteratorEnvironment env = EasyMock.createMock(SystemIteratorEnvironment.class);
-    EasyMock.expect(env.getServerContext()).andReturn(null);
-    EasyMock.expect(env.isFullMajorCompaction()).andReturn(false);
-    EasyMock.expect(env.getIteratorScope()).andReturn(IteratorScope.majc);
-    EasyMock.replay(env);
+		// the following should be deleted by filter
+		put(tm1, "2;m", TabletsSection.BulkFileColumnFamily.NAME, "/t1/file5", "8");
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/file9", "8");
+		put(tm1, "2<", TabletsSection.BulkFileColumnFamily.NAME, "/t2/fileA", "2");
 
-    TestMetadataBulkLoadFilter iter = new TestMetadataBulkLoadFilter();
-    iter.init(new SortedMapIterator(tm1), new HashMap<>(), env);
-    iter.seek(new Range(), new ArrayList<>(), false);
+		SystemIteratorEnvironment env = EasyMock.createMock(SystemIteratorEnvironment.class);
+		EasyMock.expect(env.getServerContext()).andReturn(null);
+		EasyMock.expect(env.isFullMajorCompaction()).andReturn(false);
+		EasyMock.expect(env.getIteratorScope()).andReturn(IteratorScope.majc);
+		EasyMock.replay(env);
 
-    TreeMap<Key,Value> actual = new TreeMap<>();
+		MetadataBulkLoadFilter iter = Mockito.spy(MetadataBulkLoadFilter.class);
+		Mockito.doAnswer(i -> {
+			Arbitrator res = Mockito.mock(Arbitrator.class);
+			try {
+				Mockito.when(res.transactionAlive(Mockito.anyString(), Mockito.anyLong())).thenAnswer(invo -> {
+					long tid = invo.getArgument(1);
+					return tid == 5;
+				});
+				Mockito.when(res.transactionComplete(Mockito.anyString(), Mockito.anyLong())).thenAnswer(invo -> {
+					long tid = invo.getArgument(1);
+					if (tid == 9) throw new RuntimeException();
+					return tid != 5 && tid != 7;
+				});
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 
-    while (iter.hasTop()) {
-      actual.put(iter.getTopKey(), iter.getTopValue());
-      iter.next();
-    }
+			return res;
+		}).when(iter).getArbitrator(Mockito.any());
+		iter.init(new SortedMapIterator(tm1), new HashMap<>(), env);
+		iter.seek(new Range(), new ArrayList<>(), false);
 
-    assertEquals(expected, actual);
-  }
+		TreeMap<Key, Value> actual = new TreeMap<>();
+
+		while (iter.hasTop()) {
+			actual.put(iter.getTopKey(), iter.getTopValue());
+			iter.next();
+		}
+
+		assertEquals(expected, actual);
+	}
 }

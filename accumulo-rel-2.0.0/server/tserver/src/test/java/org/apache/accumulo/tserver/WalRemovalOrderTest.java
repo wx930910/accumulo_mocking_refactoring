@@ -30,80 +30,90 @@ import org.apache.accumulo.tserver.TabletServer.ReferencedRemover;
 import org.apache.accumulo.tserver.log.DfsLogger;
 import org.apache.accumulo.tserver.log.DfsLogger.ServerResources;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.collect.Sets;
 
 public class WalRemovalOrderTest {
 
-  private static DfsLogger mockLogger(String filename) {
-    ServerResources conf = new ServerResources() {
-      @Override
-      public AccumuloConfiguration getConfiguration() {
-        return DefaultConfiguration.getInstance();
-      }
+	private static DfsLogger mockLogger(String filename) {
+		ServerResources conf = new ServerResources() {
+			@Override
+			public AccumuloConfiguration getConfiguration() {
+				return DefaultConfiguration.getInstance();
+			}
 
-      @Override
-      public VolumeManager getFileSystem() {
-        throw new UnsupportedOperationException();
-      }
-    };
-    return new DfsLogger(null, conf, filename, null);
-  }
+			@Override
+			public VolumeManager getFileSystem() {
+				throw new UnsupportedOperationException();
+			}
+		};
+		return new DfsLogger(null, conf, filename, null);
+	}
 
-  private static LinkedHashSet<DfsLogger> mockLoggers(String... logs) {
-    LinkedHashSet<DfsLogger> logSet = new LinkedHashSet<>();
+	private static LinkedHashSet<DfsLogger> mockLoggers(String... logs) {
+		LinkedHashSet<DfsLogger> logSet = new LinkedHashSet<>();
 
-    for (String log : logs) {
-      logSet.add(mockLogger(log));
-    }
+		for (String log : logs) {
+			logSet.add(mockLogger(log));
+		}
 
-    return logSet;
-  }
+		return logSet;
+	}
 
-  private static class TestRefRemover implements ReferencedRemover {
-    Set<DfsLogger> inUseLogs;
+	private static class TestRefRemover implements ReferencedRemover {
+		Set<DfsLogger> inUseLogs;
 
-    TestRefRemover(Set<DfsLogger> inUseLogs) {
-      this.inUseLogs = inUseLogs;
-    }
+		TestRefRemover(Set<DfsLogger> inUseLogs) {
+			this.inUseLogs = inUseLogs;
+		}
 
-    @Override
-    public void removeInUse(Set<DfsLogger> candidates) {
-      candidates.removeAll(inUseLogs);
-    }
-  }
+		@Override
+		public void removeInUse(Set<DfsLogger> candidates) {
+			candidates.removeAll(inUseLogs);
+		}
+	}
 
-  private static void runTest(LinkedHashSet<DfsLogger> closedLogs, Set<DfsLogger> inUseLogs,
-      Set<DfsLogger> expected) {
-    List<DfsLogger> copy = TabletServer.copyClosedLogs(closedLogs);
-    Set<DfsLogger> eligible =
-        TabletServer.findOldestUnreferencedWals(copy, new TestRefRemover(inUseLogs));
-    assertEquals(expected, eligible);
-  }
+	private static ReferencedRemover mockReferencedRemover(Set<DfsLogger> inUseLogs) {
+		ReferencedRemover res = Mockito.mock(ReferencedRemover.class);
+		Mockito.doAnswer(invo -> {
+			Set<DfsLogger> candidates = invo.getArgument(0);
+			candidates.removeAll(inUseLogs);
+			return null;
+		}).when(res).removeInUse(Mockito.anySet());
+		return res;
+	}
 
-  @Test
-  public void testWalRemoval() {
-    runTest(mockLoggers("W1", "W2"), mockLoggers(), mockLoggers("W1", "W2"));
-    runTest(mockLoggers("W1", "W2"), mockLoggers("W1"), mockLoggers());
-    runTest(mockLoggers("W1", "W2"), mockLoggers("W2"), mockLoggers("W1"));
-    runTest(mockLoggers("W1", "W2"), mockLoggers("W1", "W2"), mockLoggers());
+	private static void runTest(LinkedHashSet<DfsLogger> closedLogs, Set<DfsLogger> inUseLogs,
+			Set<DfsLogger> expected) {
+		List<DfsLogger> copy = TabletServer.copyClosedLogs(closedLogs);
+		Set<DfsLogger> eligible = TabletServer.findOldestUnreferencedWals(copy, mockReferencedRemover(inUseLogs));
+		assertEquals(expected, eligible);
+	}
 
-    // below W5 represents an open log not in the closed set
-    for (Set<DfsLogger> inUse : Sets.powerSet(mockLoggers("W1", "W2", "W3", "W4", "W5"))) {
-      Set<DfsLogger> expected;
-      if (inUse.contains(mockLogger("W1"))) {
-        expected = Collections.emptySet();
-      } else if (inUse.contains(mockLogger("W2"))) {
-        expected = mockLoggers("W1");
-      } else if (inUse.contains(mockLogger("W3"))) {
-        expected = mockLoggers("W1", "W2");
-      } else if (inUse.contains(mockLogger("W4"))) {
-        expected = mockLoggers("W1", "W2", "W3");
-      } else {
-        expected = mockLoggers("W1", "W2", "W3", "W4");
-      }
+	@Test
+	public void testWalRemoval() {
+		runTest(mockLoggers("W1", "W2"), mockLoggers(), mockLoggers("W1", "W2"));
+		runTest(mockLoggers("W1", "W2"), mockLoggers("W1"), mockLoggers());
+		runTest(mockLoggers("W1", "W2"), mockLoggers("W2"), mockLoggers("W1"));
+		runTest(mockLoggers("W1", "W2"), mockLoggers("W1", "W2"), mockLoggers());
 
-      runTest(mockLoggers("W1", "W2", "W3", "W4"), inUse, expected);
-    }
-  }
+		// below W5 represents an open log not in the closed set
+		for (Set<DfsLogger> inUse : Sets.powerSet(mockLoggers("W1", "W2", "W3", "W4", "W5"))) {
+			Set<DfsLogger> expected;
+			if (inUse.contains(mockLogger("W1"))) {
+				expected = Collections.emptySet();
+			} else if (inUse.contains(mockLogger("W2"))) {
+				expected = mockLoggers("W1");
+			} else if (inUse.contains(mockLogger("W3"))) {
+				expected = mockLoggers("W1", "W2");
+			} else if (inUse.contains(mockLogger("W4"))) {
+				expected = mockLoggers("W1", "W2", "W3");
+			} else {
+				expected = mockLoggers("W1", "W2", "W3", "W4");
+			}
+
+			runTest(mockLoggers("W1", "W2", "W3", "W4"), inUse, expected);
+		}
+	}
 }

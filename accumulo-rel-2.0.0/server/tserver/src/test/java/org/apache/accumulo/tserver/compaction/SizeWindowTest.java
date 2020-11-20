@@ -28,81 +28,88 @@ import org.apache.accumulo.core.metadata.schema.DataFileValue;
 import org.apache.accumulo.server.fs.FileRef;
 import org.apache.accumulo.tserver.compaction.DefaultCompactionStrategy.SizeWindow;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class SizeWindowTest {
 
-  static class TestSizeWindow extends SizeWindow {
-    private static Map<FileRef,DataFileValue> convert(Map<String,Integer> testData) {
-      Map<FileRef,DataFileValue> files = new HashMap<>();
-      testData.forEach((k, v) -> {
-        files.put(new FileRef("hdfs://nn1/accumulo/tables/5/t-0001/" + k), new DataFileValue(v, 0));
-      });
-      return files;
-    }
+	static class TestSizeWindow extends SizeWindow {
+		private static Map<FileRef, DataFileValue> convert(Map<String, Integer> testData) {
+			Map<FileRef, DataFileValue> files = new HashMap<>();
+			testData.forEach((k, v) -> {
+				files.put(new FileRef("hdfs://nn1/accumulo/tables/5/t-0001/" + k), new DataFileValue(v, 0));
+			});
+			return files;
+		}
 
-    /**
-     * A constructor that is more friendly for testing.
-     */
-    TestSizeWindow(Map<String,Integer> testData) {
-      super(convert(testData));
-    }
-  }
+		/**
+		 * A constructor that is more friendly for testing.
+		 */
+		TestSizeWindow(Map<String, Integer> testData) {
+			super(convert(testData));
+		}
+	}
 
-  static Collection<String> getFileNames(SizeWindow sw) {
-    return sw.getFiles().stream().map(fr -> fr.path().getName()).collect(Collectors.toSet());
-  }
+	private static Map<FileRef, DataFileValue> convert(Map<String, Integer> testData) {
+		Map<FileRef, DataFileValue> files = new HashMap<>();
+		testData.forEach((k, v) -> {
+			files.put(new FileRef("hdfs://nn1/accumulo/tables/5/t-0001/" + k), new DataFileValue(v, 0));
+		});
+		return files;
+	}
 
-  static Map<String,Integer> genTestData(int start, int end) {
-    Map<String,Integer> testData = new HashMap<>();
+	static Collection<String> getFileNames(SizeWindow sw) {
+		return sw.getFiles().stream().map(fr -> fr.path().getName()).collect(Collectors.toSet());
+	}
 
-    for (int i = start; i <= end; i++) {
-      testData.put("F" + i, i);
-    }
+	static Map<String, Integer> genTestData(int start, int end) {
+		Map<String, Integer> testData = new HashMap<>();
 
-    return testData;
-  }
+		for (int i = start; i <= end; i++) {
+			testData.put("F" + i, i);
+		}
 
-  @Test
-  public void testSlide() {
+		return testData;
+	}
 
-    Map<String,Integer> testData = genTestData(1, 20);
+	@Test
+	public void testSlide() {
 
-    TestSizeWindow tsw = new TestSizeWindow(testData);
+		Map<String, Integer> testData = genTestData(1, 20);
 
-    SizeWindow tail = tsw.tail(10);
+		TestSizeWindow tsw = new TestSizeWindow(testData);
 
-    for (int i = 10; i <= 20; i++) {
-      int expectedSum = i * (i + 1) / 2 - ((i - 10) * (i - 9) / 2);
-      assertEquals(expectedSum, tail.sum());
-      assertEquals(10, tail.size());
-      assertEquals(genTestData(i - 9, i).keySet(), getFileNames(tail));
-      assertEquals(i, tail.topSize());
-      if (tail.slideUp())
-        assertTrue(i < 20);
-      else
-        assertEquals(20, i);
-    }
-  }
+		SizeWindow tail = tsw.tail(10);
 
-  @Test
-  public void testPop() {
-    Map<String,Integer> testData = genTestData(1, 20);
+		for (int i = 10; i <= 20; i++) {
+			int expectedSum = i * (i + 1) / 2 - ((i - 10) * (i - 9) / 2);
+			assertEquals(expectedSum, tail.sum());
+			assertEquals(10, tail.size());
+			assertEquals(genTestData(i - 9, i).keySet(), getFileNames(tail));
+			assertEquals(i, tail.topSize());
+			if (tail.slideUp()) assertTrue(i < 20);
+			else assertEquals(20, i);
+		}
+	}
 
-    TestSizeWindow tsw = new TestSizeWindow(testData);
+	@Test
+	public void testPop() {
+		Map<String, Integer> testData = genTestData(1, 20);
 
-    SizeWindow tail = tsw.tail(10);
+		SizeWindow tsw = Mockito.spy(new SizeWindow(convert(testData)));
 
-    int expectedSize = 10;
+		SizeWindow tail = tsw.tail(10);
 
-    while (expectedSize > 0) {
-      int expectedSum = expectedSize * (expectedSize + 1) / 2;
-      assertEquals(expectedSum, tail.sum());
-      assertEquals(expectedSize, tail.size());
-      assertEquals(genTestData(1, expectedSize).keySet(), getFileNames(tail));
-      assertEquals(expectedSize, tail.topSize());
+		int expectedSize = 10;
 
-      tail.pop();
-      expectedSize--;
-    }
-  }
+		while (expectedSize > 0) {
+			int expectedSum = expectedSize * (expectedSize + 1) / 2;
+			assertEquals(expectedSum, tail.sum());
+			assertEquals(expectedSize, tail.size());
+			assertEquals(genTestData(1, expectedSize).keySet(), getFileNames(tail));
+			assertEquals(expectedSize, tail.topSize());
+
+			tail.pop();
+			expectedSize--;
+		}
+	}
 }
